@@ -20,24 +20,32 @@ export class EmporixClient {
         { ...this.axiosOpts, headers: { Authorization: accessToken } },
       );
       return res.data.cartId;
-    } catch {
-      throw new Error('Failed to create Emporix cart');
+    } catch (err) {
+      throw new Error('Failed to create Emporix cart', { cause: err });
     }
   }
 
   async getCart(cartId: string, accessToken: string): Promise<EmporixCart> {
-    const res = await axios.get<EmporixCart>(
-      `${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
-      { ...this.axiosOpts, headers: { Authorization: accessToken } },
-    );
-    return res.data;
+    try {
+      const res = await axios.get<EmporixCart>(
+        `${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
+        { ...this.axiosOpts, headers: { Authorization: accessToken } },
+      );
+      return res.data;
+    } catch (err) {
+      throw new Error('Failed to fetch Emporix cart', { cause: err });
+    }
   }
 
   async getCustomerGroups(accessToken: string): Promise<CustomerGroup[]> {
-    const res = await axios.get<CustomerGroup[]>(
-      `${this.apiBase}/customer-group/${this.tenantId}/customergroups`,
-      { ...this.axiosOpts, headers: { Authorization: accessToken } },
-    );
-    return res.data;
+    try {
+      const res = await axios.get<CustomerGroup[]>(
+        `${this.apiBase}/customer-group/${this.tenantId}/customergroups`,
+        { ...this.axiosOpts, headers: { Authorization: accessToken } },
+      );
+      return res.data;
+    } catch (err) {
+      throw new Error('Failed to fetch customer groups', { cause: err });
+    }
   }
 }

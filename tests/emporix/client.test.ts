@@ -47,6 +47,11 @@ describe('EmporixClient', () => {
       expect(cart.items).toHaveLength(1);
       expect(cart.items[0].sku).toBe('SKU-001');
     });
+
+    it('throws on getCart error', async () => {
+      nock(API_BASE).get(`/cart/${TENANT}/carts/missing`).reply(404, {});
+      await expect(client.getCart('missing', TOKEN)).rejects.toThrow('Failed to fetch Emporix cart');
+    });
   });
 
   describe('getCustomerGroups', () => {
@@ -58,6 +63,11 @@ describe('EmporixClient', () => {
       const groups = await client.getCustomerGroups(TOKEN);
       expect(groups).toHaveLength(2);
       expect(groups[0].id).toBe('cg-1');
+    });
+
+    it('throws on getCustomerGroups error', async () => {
+      nock(API_BASE).get(`/customer-group/${TENANT}/customergroups`).reply(500, {});
+      await expect(client.getCustomerGroups(TOKEN)).rejects.toThrow('Failed to fetch customer groups');
     });
   });
 });
