@@ -29,7 +29,7 @@ export function emporixJwtMiddleware(req: Request, res: Response, next: NextFunc
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
-    (req as Request & { tenantId: string }).tenantId = (decoded as jwt.JwtPayload).tenantId as string;
+    req.tenantId = (decoded as jwt.JwtPayload).tenantId as string;
     next();
   });
 }
