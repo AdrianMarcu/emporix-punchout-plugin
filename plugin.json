@@ -1,0 +1,34 @@
+{
+  "id": "emporix-punchout-plugin",
+  "name": "Punchout Connector",
+  "version": "1.0.0",
+  "description": "Enables cXML and OCI punchout for enterprise procurement system buyers.",
+  "vendor": "Your Company",
+  "category": "B2B",
+  "entrypoint": "https://{plugin_host}",
+  "adminUI": {
+    "extensionPoint": "settings",
+    "url": "https://{plugin_host}/admin-ui/index.html"
+  },
+  "endpoints": [
+    { "path": "/punchout/cxml/setup", "method": "POST", "description": "cXML PunchOutSetupRequest endpoint" },
+    { "path": "/punchout/oci/setup", "method": "POST", "description": "OCI setup form POST endpoint" },
+    { "path": "/punchout/return", "method": "POST", "description": "Cart return endpoint" },
+    { "path": "/punchout-widget.js", "method": "GET", "description": "Storefront punchout widget" }
+  ],
+  "requiredScopes": [
+    "cart.cart_manage",
+    "customer-group.customergroup_view",
+    "configuration.configuration_manage"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "PLUGIN_HOST": { "type": "string", "description": "Public URL where this plugin is hosted" },
+      "REDIS_HOST": { "type": "string", "description": "Redis hostname" },
+      "EMPORIX_TENANT_ID": { "type": "string", "description": "Emporix tenant ID" },
+      "AES_KEY": { "type": "string", "description": "32-character AES-256 encryption key for secrets at rest" }
+    },
+    "required": ["PLUGIN_HOST", "EMPORIX_TENANT_ID", "AES_KEY"]
+  }
+}

@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+  plugin:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - PLUGIN_HOST=${PLUGIN_HOST}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - EMPORIX_API_BASE=${EMPORIX_API_BASE:-https://api.emporix.io}
+      - EMPORIX_TENANT_ID=${EMPORIX_TENANT_ID}
+      - EMPORIX_JWKS_URI=${EMPORIX_JWKS_URI:-https://api.emporix.io/.well-known/jwks.json}
+      - EMPORIX_CLIENT_ID=${EMPORIX_CLIENT_ID}
+      - EMPORIX_CLIENT_SECRET=${EMPORIX_CLIENT_SECRET}
+      - AES_KEY=${AES_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
