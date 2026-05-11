@@ -38,13 +38,16 @@ export async function saveConfig(
   incoming: Omit<PluginConfig, 'sharedSecretHash'> & { sharedSecret?: string },
   accessToken: string,
 ): Promise<void> {
-  const existing = await getConfig(tenantId, accessToken).catch(() => null);
-  const sharedSecretHash = incoming.sharedSecret
-    ? await hashSecret(incoming.sharedSecret)
+  const existing = await getConfig(tenantId, accessToken);
+
+  const { sharedSecret, ...configFields } = incoming;
+
+  const sharedSecretHash = sharedSecret
+    ? await hashSecret(sharedSecret)
     : (existing?.sharedSecretHash ?? '');
 
   const toSave: PluginConfig = {
-    ...incoming,
+    ...configFields,
     sharedSecretHash,
     serviceAccount: {
       clientId: incoming.serviceAccount.clientId,
