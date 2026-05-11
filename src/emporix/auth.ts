@@ -28,12 +28,13 @@ export class TokenCache {
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
       );
       data = res.data;
-    } catch {
-      throw new Error('Emporix auth failed: unable to obtain access token');
+    } catch (err) {
+      throw new Error('Emporix auth failed', { cause: err });
     }
 
     this.token = data.access_token;
-    this.expiresAt = Date.now() + (data.expires_in - 30) * 1000;
+    const safeExpiresIn = Math.max(data.expires_in - 30, 10);
+    this.expiresAt = Date.now() + safeExpiresIn * 1000;
     return this.token;
   }
 }

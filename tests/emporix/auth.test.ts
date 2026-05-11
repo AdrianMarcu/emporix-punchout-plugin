@@ -38,4 +38,18 @@ describe('TokenCache', () => {
     const cache = new TokenCache(API_BASE, TENANT, 'bad-id', 'bad-secret');
     await expect(cache.getToken()).rejects.toThrow('Emporix auth failed');
   });
+
+  it('re-fetches when cached token has expired', async () => {
+    nock(API_BASE)
+      .post(`/customerlogin/auth/anonymous/token`)
+      .twice()
+      .reply(200, { access_token: 'tok-fresh', expires_in: 3600, token_type: 'Bearer' });
+
+    const cache = new TokenCache(API_BASE, TENANT, 'client-id', 'client-secret');
+    await cache.getToken();
+    // Manually expire the token
+    (cache as unknown as { expiresAt: number }).expiresAt = Date.now() - 1000;
+    const refreshed = await cache.getToken();
+    expect(refreshed).toBe('tok-fresh');
+  });
 });
