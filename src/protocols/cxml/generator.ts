@@ -21,12 +21,13 @@ export function buildSetupResponse(startPageUrl: string): string {
 
 export function buildOrderMessage(
   buyerCookie: string,
-  operationAllowed: string,
+  operationAllowed: 'create' | 'edit' | 'inspect',
   items: CxmlCartItem[],
   currency: string,
 ): string {
   const payloadId = `${Date.now()}@emporix-punchout-plugin`;
-  const total = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0).toFixed(2);
+  const totalCents = items.reduce((sum, i) => sum + Math.round(i.unitPrice * 100) * i.quantity, 0);
+  const total = (totalCents / 100).toFixed(2);
 
   const root = create({ version: '1.0', encoding: 'UTF-8' })
     .ele('cXML', {
