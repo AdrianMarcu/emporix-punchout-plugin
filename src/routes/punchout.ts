@@ -13,7 +13,7 @@ import { config as appConfig } from '../config';
 import type { CxmlCartItem } from '../protocols/cxml/types';
 import type { OciReturnItem } from '../protocols/oci/types';
 import type { EmporixCart } from '../emporix/types';
-import axios from 'axios';
+import { EmporixClient } from '../emporix/client';
 
 const store = new SessionStore(appConfig.redis);
 
@@ -163,11 +163,15 @@ export function createPunchoutRouter(tenantId: string): Router {
 
     let cart: EmporixCart;
     try {
-      const cartRes = await axios.get<EmporixCart>(
-        `${appConfig.emporix.apiBase}/cart/${tenantId}/carts/${session.emporixCartId}`,
-        { timeout: appConfig.outboundTimeoutMs },
+      const saTokenCache = new TokenCache(
+        appConfig.emporix.apiBase,
+        tenantId,
+        cfg.serviceAccount.clientId,
+        cfg.serviceAccount.clientSecret,
       );
-      cart = cartRes.data;
+      const saToken = await saTokenCache.getToken();
+      const emporixClient = new EmporixClient(appConfig.emporix.apiBase, tenantId, appConfig.outboundTimeoutMs);
+      cart = await emporixClient.getCart(session.emporixCartId!, `Bearer ${saToken}`);
     } catch {
       res.status(502).send(expiredPage());
       return;

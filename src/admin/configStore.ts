@@ -46,12 +46,18 @@ export async function saveConfig(
     ? await hashSecret(sharedSecret)
     : (existing?.sharedSecretHash ?? '');
 
+  const rawClientSecret = incoming.serviceAccount.clientSecret;
+  const clientSecretToEncrypt = (rawClientSecret === '***' && existing)
+    ? existing.serviceAccount.clientSecret  // already decrypted by getConfig
+    : rawClientSecret;
+  const encryptedClientSecret = encrypt(clientSecretToEncrypt, appConfig.crypto.aesKey);
+
   const toSave: PluginConfig = {
     ...configFields,
     sharedSecretHash,
     serviceAccount: {
       clientId: incoming.serviceAccount.clientId,
-      clientSecret: encrypt(incoming.serviceAccount.clientSecret, appConfig.crypto.aesKey),
+      clientSecret: encryptedClientSecret,
     },
   };
 

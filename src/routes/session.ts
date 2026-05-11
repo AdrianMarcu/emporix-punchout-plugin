@@ -74,6 +74,7 @@ export function createSessionRouter(tenantId: string): Router {
         httpOnly: true,
         sameSite: 'lax',
         maxAge: appConfig.sessionTtlSeconds * 1000,
+        secure: process.env.NODE_ENV === 'production',
       });
       res.redirect(`${cfg.storefrontBaseUrl}?cartId=${cartId}`);
     } catch {
