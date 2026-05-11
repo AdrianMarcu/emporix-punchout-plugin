@@ -1,20 +1,21 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { CxmlSetupRequest } from './types';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
 
 export function parsePunchOutSetupRequest(xml: string): CxmlSetupRequest {
-  let doc: Record<string, unknown>;
-  try {
-    doc = parser.parse(xml) as Record<string, unknown>;
-  } catch {
-    throw new Error('Invalid cXML: parse error');
+  const validation = XMLValidator.validate(xml);
+  if (validation !== true) {
+    throw new Error('Invalid cXML');
   }
+
+  const doc = parser.parse(xml) as Record<string, unknown>;
 
   const root = doc['cXML'] as Record<string, unknown> | undefined;
   if (!root) throw new Error('Invalid cXML: missing root element');
 
   const payloadId = String(root['@_payloadID'] ?? '');
+  if (!payloadId) throw new Error('Invalid cXML: missing payloadID attribute');
 
   const header = root['Header'] as Record<string, unknown> | undefined;
   if (!header) throw new Error('Invalid cXML: missing Header');
@@ -40,7 +41,12 @@ export function parsePunchOutSetupRequest(xml: string): CxmlSetupRequest {
   const browserFormPostUrl = String(bfp?.['URL'] ?? '');
   if (!browserFormPostUrl) throw new Error('Missing BrowserFormPost URL');
 
-  const operation = String((setupReq['@_operation'] as string) ?? 'create') as CxmlSetupRequest['operation'];
+  const rawOperation = String((setupReq['@_operation'] as string) ?? 'create');
+  const VALID_OPERATIONS = ['create', 'edit', 'inspect'] as const;
+  if (!VALID_OPERATIONS.includes(rawOperation as CxmlSetupRequest['operation'])) {
+    throw new Error(`Invalid operation: ${rawOperation}`);
+  }
+  const operation = rawOperation as CxmlSetupRequest['operation'];
 
   return { payloadId, buyerOrgId, sharedSecret, buyerCookie, browserFormPostUrl, operation };
 }

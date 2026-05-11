@@ -46,6 +46,15 @@ describe('parsePunchOutSetupRequest', () => {
     expect(() => parsePunchOutSetupRequest('<broken')).toThrow('Invalid cXML');
   });
 
+  it('throws on well-formed but non-cXML XML', () => {
+    expect(() => parsePunchOutSetupRequest('<foo/>')).toThrow('Invalid cXML');
+  });
+
+  it('throws on invalid operation value', () => {
+    const xml = VALID_XML.replace('operation="create"', 'operation="delete"');
+    expect(() => parsePunchOutSetupRequest(xml)).toThrow('Invalid operation');
+  });
+
   it('throws when BuyerCookie is missing', () => {
     const xml = VALID_XML.replace('<BuyerCookie>cookie-abc-123</BuyerCookie>', '');
     expect(() => parsePunchOutSetupRequest(xml)).toThrow('Missing BuyerCookie');
