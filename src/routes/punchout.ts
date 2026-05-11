@@ -6,6 +6,7 @@ import { parseOciSetupRequest } from '../protocols/oci/parser';
 import { buildOciReturnFields } from '../protocols/oci/generator';
 import { SessionStore } from '../session/store';
 import { getConfig } from '../admin/configStore';
+import type { PluginConfig } from '../admin/configStore';
 import { TokenCache } from '../emporix/auth';
 import { verifySecret } from '../crypto';
 import { config as appConfig } from '../config';
@@ -39,6 +40,13 @@ function escapeHtml(raw: string): string {
 export function createPunchoutRouter(tenantId: string): Router {
   const router = Router();
 
+  const bootstrapCache = new TokenCache(
+    appConfig.emporix.apiBase,
+    tenantId,
+    appConfig.emporix.clientId,
+    appConfig.emporix.clientSecret,
+  );
+
   router.post('/cxml/setup', async (req: Request, res: Response) => {
     const xmlBody = req.body as string;
     let parsed;
@@ -50,9 +58,8 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    let cfg: PluginConfig | null = null;
     try {
-      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
       cfg = await getConfig(tenantId, await bootstrapCache.getToken());
     } catch { cfg = null; }
     if (!cfg || !cfg.cxmlEnabled) {
@@ -97,9 +104,8 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    let cfg: PluginConfig | null = null;
     try {
-      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
       cfg = await getConfig(tenantId, await bootstrapCache.getToken());
     } catch { cfg = null; }
     if (!cfg || !cfg.ociEnabled) {
@@ -146,9 +152,8 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    let cfg: PluginConfig | null = null;
     try {
-      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
       cfg = await getConfig(tenantId, await bootstrapCache.getToken());
     } catch { cfg = null; }
     if (!cfg) {

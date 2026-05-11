@@ -3,39 +3,41 @@ import { SessionStore } from '../session/store';
 import { EmporixClient } from '../emporix/client';
 import { TokenCache } from '../emporix/auth';
 import { getConfig } from '../admin/configStore';
+import type { PluginConfig } from '../admin/configStore';
 import { config as appConfig } from '../config';
+
+const store = new SessionStore(appConfig.redis);
 
 export function createSessionRouter(tenantId: string): Router {
   const router = Router();
-  const store = new SessionStore(appConfig.redis);
+
+  const bootstrapCache = new TokenCache(
+    appConfig.emporix.apiBase,
+    tenantId,
+    appConfig.emporix.clientId,
+    appConfig.emporix.clientSecret,
+  );
+
+  let serviceAccountCache: TokenCache | null = null;
+  let serviceAccountClientId: string | null = null;
 
   router.get('/:token', async (req: Request, res: Response) => {
     const { token } = req.params;
     const sessionId = await store.consumeToken(token);
 
     if (!sessionId) {
-      res.status(410).send(
-        '<html><body><p>Your punchout session has expired. Please return to your procurement system and try again.</p></body></html>'
-      );
+      res.status(410).send(expiredPage());
       return;
     }
 
     const session = await store.getSession(sessionId);
     if (!session) {
-      res.status(410).send(
-        '<html><body><p>Your punchout session has expired. Please return to your procurement system and try again.</p></body></html>'
-      );
+      res.status(410).send(expiredPage());
       return;
     }
 
-    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    let cfg: PluginConfig | null = null;
     try {
-      const bootstrapCache = new TokenCache(
-        appConfig.emporix.apiBase,
-        tenantId,
-        appConfig.emporix.clientId,
-        appConfig.emporix.clientSecret,
-      );
       const bootstrapToken = await bootstrapCache.getToken();
       cfg = await getConfig(tenantId, bootstrapToken);
     } catch {
@@ -48,13 +50,16 @@ export function createSessionRouter(tenantId: string): Router {
     }
 
     try {
-      const tokenCache = new TokenCache(
-        appConfig.emporix.apiBase,
-        tenantId,
-        cfg.serviceAccount.clientId,
-        cfg.serviceAccount.clientSecret,
-      );
-      const accessToken = await tokenCache.getToken();
+      if (!serviceAccountCache || serviceAccountClientId !== cfg.serviceAccount.clientId) {
+        serviceAccountCache = new TokenCache(
+          appConfig.emporix.apiBase,
+          tenantId,
+          cfg.serviceAccount.clientId,
+          cfg.serviceAccount.clientSecret,
+        );
+        serviceAccountClientId = cfg.serviceAccount.clientId;
+      }
+      const accessToken = await serviceAccountCache.getToken();
       const emporixClient = new EmporixClient(
         appConfig.emporix.apiBase,
         tenantId,
@@ -79,4 +84,8 @@ export function createSessionRouter(tenantId: string): Router {
   });
 
   return router;
+}
+
+function expiredPage(): string {
+  return '<html><body><p>Your punchout session has expired. Please return to your procurement system and try again.</p></body></html>';
 }
