@@ -9,6 +9,8 @@ export const config = {
     apiBase: process.env.EMPORIX_API_BASE ?? 'https://api.emporix.io',
     tenantId: process.env.EMPORIX_TENANT_ID ?? '',
     jwksUri: process.env.EMPORIX_JWKS_URI ?? 'https://api.emporix.io/.well-known/jwks.json',
+    clientId: process.env.EMPORIX_CLIENT_ID ?? '',
+    clientSecret: process.env.EMPORIX_CLIENT_SECRET ?? '',
   },
   crypto: {
     aesKey: process.env.AES_KEY ?? '',

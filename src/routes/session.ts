@@ -28,16 +28,22 @@ export function createSessionRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, 'system').catch(() => null);
-
-    res.cookie('punchout_session', sessionId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: appConfig.sessionTtlSeconds * 1000,
-    });
+    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    try {
+      const bootstrapCache = new TokenCache(
+        appConfig.emporix.apiBase,
+        tenantId,
+        appConfig.emporix.clientId,
+        appConfig.emporix.clientSecret,
+      );
+      const bootstrapToken = await bootstrapCache.getToken();
+      cfg = await getConfig(tenantId, bootstrapToken);
+    } catch {
+      cfg = null;
+    }
 
     if (!cfg) {
-      res.redirect('/');
+      res.status(503).send('<html><body><p>Plugin not configured. Please contact the supplier.</p></body></html>');
       return;
     }
 
@@ -59,7 +65,11 @@ export function createSessionRouter(tenantId: string): Router {
         `Bearer ${accessToken}`,
       );
       await store.updateCartId(sessionId, cartId);
-
+      res.cookie('punchout_session', sessionId, {
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: appConfig.sessionTtlSeconds * 1000,
+      });
       res.redirect(`${cfg.storefrontBaseUrl}?cartId=${cartId}`);
     } catch {
       res.status(502).send(

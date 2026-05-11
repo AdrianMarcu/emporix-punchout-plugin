@@ -6,6 +6,7 @@ import { parseOciSetupRequest } from '../protocols/oci/parser';
 import { buildOciReturnFields } from '../protocols/oci/generator';
 import { SessionStore } from '../session/store';
 import { getConfig } from '../admin/configStore';
+import { TokenCache } from '../emporix/auth';
 import { verifySecret } from '../crypto';
 import { config as appConfig } from '../config';
 import type { CxmlCartItem } from '../protocols/cxml/types';
@@ -49,7 +50,11 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, 'system').catch(() => null);
+    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    try {
+      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
+      cfg = await getConfig(tenantId, await bootstrapCache.getToken());
+    } catch { cfg = null; }
     if (!cfg || !cfg.cxmlEnabled) {
       res.status(503).type('text/xml').send(buildCxmlError(503, 'Punchout not configured'));
       return;
@@ -92,7 +97,11 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, 'system').catch(() => null);
+    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    try {
+      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
+      cfg = await getConfig(tenantId, await bootstrapCache.getToken());
+    } catch { cfg = null; }
     if (!cfg || !cfg.ociEnabled) {
       res.status(503).json({ error: 'OCI punchout not configured' });
       return;
@@ -137,7 +146,11 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, 'system').catch(() => null);
+    let cfg: import('../admin/configStore').PluginConfig | null = null;
+    try {
+      const bootstrapCache = new TokenCache(appConfig.emporix.apiBase, tenantId, appConfig.emporix.clientId, appConfig.emporix.clientSecret);
+      cfg = await getConfig(tenantId, await bootstrapCache.getToken());
+    } catch { cfg = null; }
     if (!cfg) {
       res.status(503).send(expiredPage());
       return;
