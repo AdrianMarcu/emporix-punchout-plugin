@@ -51,9 +51,15 @@ describe('SessionStore', () => {
 
   it('updates cart ID on an existing session', async () => {
     await store.saveSession(makeSession(), 7200);
-    await store.updateCartId('sess-001', 'cart-999');
+    const result = await store.updateCartId('sess-001', 'cart-999');
+    expect(result).toBe(true);
     const updated = await store.getSession('sess-001');
     expect(updated?.emporixCartId).toBe('cart-999');
+  });
+
+  it('returns false when updating cart on missing session', async () => {
+    const result = await store.updateCartId('nonexistent', 'cart-999');
+    expect(result).toBe(false);
   });
 
   it('deletes a session', async () => {

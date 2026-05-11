@@ -17,11 +17,12 @@ export class SessionStore {
 
   async consumeToken(token: string): Promise<string | null> {
     const key = `${TOKEN_PREFIX}${token}`;
-    const results = await this.redis.multi().get(key).del(key).exec() as Array<[Error | null, any]>;
-    if (!results || results.length === 0) return null;
-    const [error, sessionId] = results[0];
-    if (error) return null;
-    return sessionId ?? null;
+    const results = await this.redis.multi().get(key).del(key).exec() as Array<[Error | null, unknown]>;
+    if (!results || results.length < 2) return null;
+    const [getErr, sessionId] = results[0];
+    const [delErr] = results[1];
+    if (getErr || delErr) return null;
+    return (sessionId as string | null) ?? null;
   }
 
   async saveSession(session: PunchoutSession, ttlSeconds: number): Promise<void> {
@@ -39,12 +40,21 @@ export class SessionStore {
     return JSON.parse(raw) as PunchoutSession;
   }
 
-  async updateCartId(sessionId: string, cartId: string): Promise<void> {
-    const session = await this.getSession(sessionId);
-    if (!session) return;
-    const ttl = await this.redis.ttl(`${ACTIVE_PREFIX}${sessionId}`);
+  async updateCartId(sessionId: string, cartId: string): Promise<boolean> {
+    const key = `${ACTIVE_PREFIX}${sessionId}`;
+    const [raw, ttl] = await this.redis.multi().get(key).ttl(key).exec() as Array<[Error | null, unknown]>;
+    const sessionJson = raw[1] as string | null;
+    if (!sessionJson) return false;
+    const session = JSON.parse(sessionJson) as PunchoutSession;
     session.emporixCartId = cartId;
-    await this.redis.set(`${ACTIVE_PREFIX}${sessionId}`, JSON.stringify(session), 'EX', ttl > 0 ? ttl : 7200);
+    const rawTtl = ttl[1] as number;
+    const effectiveTtl = rawTtl > 0 ? rawTtl : (rawTtl === -1 ? null : 7200);
+    if (effectiveTtl !== null) {
+      await this.redis.set(key, JSON.stringify(session), 'EX', effectiveTtl);
+    } else {
+      await this.redis.set(key, JSON.stringify(session));
+    }
+    return true;
   }
 
   async deleteSession(sessionId: string): Promise<void> {
