@@ -20,6 +20,21 @@ describe('encrypt/decrypt', () => {
     parts[2] = Buffer.from('tampered').toString('base64');
     expect(() => decrypt(parts.join(':'), KEY)).toThrow();
   });
+
+  it('throws on tampered auth tag', () => {
+    const cipher = encrypt('secret', KEY);
+    const parts = cipher.split(':');
+    parts[1] = Buffer.from('tampered-auth-tag-00').toString('base64');
+    expect(() => decrypt(parts.join(':'), KEY)).toThrow();
+  });
+
+  it('throws on encrypt with wrong-length key', () => {
+    expect(() => encrypt('hello', 'short')).toThrow('AES key must be exactly 32 bytes');
+  });
+
+  it('throws on decrypt with malformed ciphertext', () => {
+    expect(() => decrypt('not:valid', KEY)).toThrow('Invalid ciphertext format');
+  });
 });
 
 describe('hashSecret / verifySecret', () => {

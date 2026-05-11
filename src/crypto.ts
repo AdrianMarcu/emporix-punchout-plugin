@@ -6,6 +6,9 @@ const IV_LENGTH = 12;
 const SALT_ROUNDS = 10;
 
 export function encrypt(plaintext: string, key: string): string {
+  if (Buffer.byteLength(key, 'utf8') !== 32) {
+    throw new Error('AES key must be exactly 32 bytes');
+  }
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, Buffer.from(key), iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
@@ -14,7 +17,14 @@ export function encrypt(plaintext: string, key: string): string {
 }
 
 export function decrypt(ciphertext: string, key: string): string {
-  const [ivB64, authTagB64, dataB64] = ciphertext.split(':');
+  if (Buffer.byteLength(key, 'utf8') !== 32) {
+    throw new Error('AES key must be exactly 32 bytes');
+  }
+  const parts = ciphertext.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid ciphertext format');
+  }
+  const [ivB64, authTagB64, dataB64] = parts;
   const decipher = createDecipheriv(ALGORITHM, Buffer.from(key), Buffer.from(ivB64, 'base64'));
   decipher.setAuthTag(Buffer.from(authTagB64, 'base64'));
   return Buffer.concat([
