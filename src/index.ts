@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import { config } from './config';
 import { createPunchoutRouter } from './routes/punchout';
 import { createSessionRouter } from './routes/session';
@@ -11,6 +12,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: 'text/xml' }));
 
+app.use('/admin-ui', express.static(path.join(__dirname, '../src/admin-ui-dist')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/punchout', punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
