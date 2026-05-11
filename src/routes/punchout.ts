@@ -15,6 +15,26 @@ import axios from 'axios';
 
 const store = new SessionStore(appConfig.redis);
 
+/** Escape special characters for safe insertion into XML attributes and text nodes. */
+function escapeXml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Escape special characters for safe insertion into HTML attributes and text nodes. */
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function createPunchoutRouter(tenantId: string): Router {
   const router = Router();
 
@@ -29,7 +49,7 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, '').catch(() => null);
+    const cfg = await getConfig(tenantId, 'system').catch(() => null);
     if (!cfg || !cfg.cxmlEnabled) {
       res.status(503).type('text/xml').send(buildCxmlError(503, 'Punchout not configured'));
       return;
@@ -72,7 +92,7 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    const cfg = await getConfig(tenantId, '').catch(() => null);
+    const cfg = await getConfig(tenantId, 'system').catch(() => null);
     if (!cfg || !cfg.ociEnabled) {
       res.status(503).json({ error: 'OCI punchout not configured' });
       return;
@@ -105,14 +125,19 @@ export function createPunchoutRouter(tenantId: string): Router {
   });
 
   router.post('/return', async (req: Request, res: Response) => {
-    const { cartId, sessionId } = req.body as { cartId?: string; sessionId?: string };
+    const { sessionId } = req.body as { sessionId?: string };
     const session = sessionId ? await store.getSession(sessionId) : null;
     if (!session) {
       res.status(410).send(expiredPage());
       return;
     }
 
-    const cfg = await getConfig(tenantId, '').catch(() => null);
+    if (!session.emporixCartId) {
+      res.status(410).send(expiredPage());
+      return;
+    }
+
+    const cfg = await getConfig(tenantId, 'system').catch(() => null);
     if (!cfg) {
       res.status(503).send(expiredPage());
       return;
@@ -121,7 +146,7 @@ export function createPunchoutRouter(tenantId: string): Router {
     let cart: EmporixCart;
     try {
       const cartRes = await axios.get<EmporixCart>(
-        `${appConfig.emporix.apiBase}/cart/${tenantId}/carts/${cartId ?? session.emporixCartId}`,
+        `${appConfig.emporix.apiBase}/cart/${tenantId}/carts/${session.emporixCartId}`,
         { timeout: appConfig.outboundTimeoutMs },
       );
       cart = cartRes.data;
@@ -130,49 +155,43 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
-    if (session.protocol === 'cxml') {
-      const items: CxmlCartItem[] = cart.items.map(i => ({
-        sku: i.sku,
-        name: i.name,
-        quantity: i.quantity,
-        unitPrice: i.price.amount,
-        currency: i.price.currency,
-        uom: i.uom,
-      }));
-      const orderMsg = buildOrderMessage(session.buyerCookie, cfg.operationAllowed, items, cart.currency);
-      try {
-        await axios.post(session.browserFormPostUrl, orderMsg, {
-          headers: { 'Content-Type': 'text/xml' },
-          timeout: appConfig.outboundTimeoutMs,
-        });
-      } catch {
-        res.status(502).send(expiredPage());
-        return;
+    try {
+      if (session.protocol === 'cxml') {
+        const items: CxmlCartItem[] = cart.items.map(i => ({
+          sku: i.sku,
+          name: i.name,
+          quantity: i.quantity,
+          unitPrice: i.price.amount,
+          currency: i.price.currency,
+          uom: i.uom,
+        }));
+        const orderMsg = buildOrderMessage(session.buyerCookie, cfg.operationAllowed, items, cart.currency);
+        const formHtml = buildCxmlReturnFormHtml(session.browserFormPostUrl, orderMsg);
+        res.status(200).send(formHtml);
+      } else {
+        const ociItems: OciReturnItem[] = cart.items.map(i => ({
+          description: i.name,
+          matnr: i.sku,
+          quantity: i.quantity,
+          unit: i.uom,
+          price: i.price.amount,
+          currency: i.price.currency,
+          vendorMat: i.sku,
+        }));
+        const fields = buildOciReturnFields(ociItems, cfg.ociOkCode);
+        const formHtml = buildOciFormHtml(session.browserFormPostUrl, fields);
+        res.status(200).send(formHtml);
       }
-      res.status(200).send('<html><body>Cart transferred. You may close this window.</body></html>');
-    } else {
-      const ociItems: OciReturnItem[] = cart.items.map(i => ({
-        description: i.name,
-        matnr: i.sku,
-        quantity: i.quantity,
-        unit: i.uom,
-        price: i.price.amount,
-        currency: i.price.currency,
-        vendorMat: i.sku,
-      }));
-      const fields = buildOciReturnFields(ociItems, cfg.ociOkCode);
-      const formHtml = buildOciFormHtml(session.browserFormPostUrl, fields);
-      res.status(200).send(formHtml);
+    } finally {
+      await store.deleteSession(session.sessionId);
     }
-
-    await store.deleteSession(session.sessionId);
   });
 
   return router;
 }
 
 function buildCxmlError(code: number, text: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><cXML><Response><Status code="${code}" text="${text}"/></Response></cXML>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><cXML><Response><Status code="${code}" text="${escapeXml(text)}"/></Response></cXML>`;
 }
 
 function expiredPage(): string {
@@ -181,9 +200,17 @@ function expiredPage(): string {
 
 function buildOciFormHtml(hookUrl: string, fields: Record<string, string>): string {
   const inputs = Object.entries(fields)
-    .map(([k, v]) => `<input type="hidden" name="${k}" value="${v.replace(/"/g, '&quot;')}">`)
+    .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
     .join('\n');
   return `<html><body onload="document.forms[0].submit()">
-<form method="POST" action="${hookUrl}">${inputs}</form>
+<form method="POST" action="${escapeHtml(hookUrl)}">${inputs}</form>
+</body></html>`;
+}
+
+function buildCxmlReturnFormHtml(postUrl: string, xmlData: string): string {
+  return `<html><body onload="document.forms[0].submit()">
+<form method="POST" action="${escapeHtml(postUrl)}">
+<input type="hidden" name="cXMLData" value="${escapeHtml(xmlData)}">
+</form>
 </body></html>`;
 }
