@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { Buffer } from 'buffer';
 import helmet from 'helmet';
+import cors from 'cors';
 import { config } from './config';
 import { createPunchoutRouter } from './routes/punchout';
 import { createSessionRouter } from './routes/session';
@@ -13,17 +14,21 @@ if (process.env.NODE_ENV !== 'test' && Buffer.byteLength(config.crypto.aesKey, '
   throw new Error('AES_KEY must be exactly 32 bytes. Set it in your environment.');
 }
 
+const DASHBOARD_ORIGIN = 'https://admin.emporix.io';
+const adminCors = cors({ origin: DASHBOARD_ORIGIN, credentials: true });
+
 const app = express();
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: 'text/xml' }));
 
-app.use('/admin-ui', express.static(path.join(__dirname, '../src/admin-ui-dist')));
+// Allow Emporix dashboard to load remoteEntry.js and call admin routes cross-origin
+app.use('/admin-ui', adminCors, express.static(path.join(__dirname, '../src/admin-ui-dist')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/punchout', punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
-app.use('/admin', createAdminRouter());
+app.use('/admin', adminCors, createAdminRouter());
 app.use('/', createWidgetRouter());
 
 if (require.main === module) {
