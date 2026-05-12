@@ -29,7 +29,8 @@ export default function ConnectionTest() {
     setLoading(true);
     setResult('');
     try {
-      const res = await fetch('/punchout/cxml/setup', {
+      const pluginHost = (import.meta.env.VITE_PLUGIN_HOST as string) ?? '';
+      const res = await fetch(`${pluginHost}/punchout/cxml/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
         body: SAMPLE_CXML,

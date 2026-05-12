@@ -5,7 +5,8 @@ export function setToken(token: string) {
 }
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`/admin${path}`, {
+  const base = (import.meta.env.VITE_PLUGIN_HOST as string) ?? '';
+  const res = await fetch(`${base}/admin${path}`, {
     ...opts,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwtToken}`, ...opts?.headers },
   });
