@@ -1,12 +1,18 @@
 let jwtToken = '';
 
+// In module federation context the chunks are served from the plugin host,
+// so import.meta.url gives the correct origin without needing a baked-in env var.
+const API_BASE = (() => {
+  if (import.meta.env.VITE_PLUGIN_HOST) return import.meta.env.VITE_PLUGIN_HOST as string;
+  try { return new URL(import.meta.url).origin; } catch { return ''; }
+})();
+
 export function setToken(token: string) {
   jwtToken = token;
 }
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const base = (import.meta.env.VITE_PLUGIN_HOST as string) ?? '';
-  const res = await fetch(`${base}/admin${path}`, {
+  const res = await fetch(`${API_BASE}/admin${path}`, {
     ...opts,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwtToken}`, ...opts?.headers },
   });
