@@ -42,7 +42,13 @@ app.get('/admin-ui/assets/remoteEntry.js', cors(), (req, res, next) => {
 });
 
 // Allow Emporix dashboard to load remoteEntry.js and call admin routes cross-origin
-app.use('/admin-ui', cors(), express.static(path.join(__dirname, '../src/admin-ui-dist')));
+app.use('/admin-ui', (_req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, '../src/admin-ui-dist')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/punchout', punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
