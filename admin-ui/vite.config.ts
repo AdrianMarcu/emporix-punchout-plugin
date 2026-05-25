@@ -44,7 +44,9 @@ export default defineConfig({
     minify: false,
     cssCodeSplit: false,
   },
-  base: '/admin-ui/',
+  // Use relative base so federation chunk imports resolve against remoteEntry.js's
+  // own URL (Railway) rather than the host page's origin (admin.emporix.io).
+  base: './',
   server: {
     cors: { origin: 'https://admin.emporix.io', credentials: true },
   },
