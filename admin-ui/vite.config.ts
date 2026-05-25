@@ -16,7 +16,29 @@ function federationWindowShim(scopeName: string): Plugin {
           // is already inside assets/, that resolves to assets/assets/chunk.js → 404.
           // Strip the extra 'assets/' so the path is './chunk.js' (same directory).
           chunk.code = chunk.code.replace(/__federation_import\((['"])\.\/assets\//g, '__federation_import($1./');
-          chunk.code += `\nif (typeof window !== 'undefined') window[${JSON.stringify(scopeName)}] = { get, init };\n`;
+          chunk.code += `
+if (typeof window !== 'undefined') {
+  const _get = get;
+  const _init = init;
+  window[${JSON.stringify(scopeName)}] = {
+    get: (module) => {
+      console.log('[extension.get] called with:', JSON.stringify(module));
+      try {
+        const result = _get(module);
+        result instanceof Promise
+          ? result.then(() => console.log('[extension.get] resolved ok')).catch(e => console.error('[extension.get] rejected:', e))
+          : null;
+        return result;
+      } catch(e) { console.error('[extension.get] threw:', e); throw e; }
+    },
+    init: (scope) => {
+      console.log('[extension.init] called, scope keys:', scope ? Object.keys(scope).join(',') : 'none');
+      return _init(scope);
+    },
+  };
+  console.log('[extension] container registered on window');
+}
+`;
         }
       }
     },
