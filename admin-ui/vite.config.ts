@@ -15,16 +15,20 @@ function federationWindowShim(scopeName: string): Plugin {
           // generates import paths like './assets/chunk.js', but since remoteEntry.js
           // is already inside assets/, that resolves to assets/assets/chunk.js → 404.
           // Strip the extra 'assets/' so the path is './chunk.js' (same directory).
+          // Fix: strip the extra assets/ so federation imports resolve correctly
           chunk.code = chunk.code.replace(/__federation_import\((['"])\.\/assets\//g, '__federation_import($1./');
-          // Instrument the exported get/init so we can see if Emporix calls them
-          // via dynamic import() rather than via the window['extension'] wrapper.
+          // Instrument init
           chunk.code = chunk.code.replace(
-            /const get =\(module\) => \{/,
-            "const get =(module) => { console.log('[ext] get() called with:', JSON.stringify(module));"
-          );
-          chunk.code = chunk.code.replace(
-            /const init =\(shareScope\) => \{/,
+            'const init =(shareScope) => {',
             "const init =(shareScope) => { console.log('[ext] init() called, keys:', shareScope ? Object.keys(shareScope).join(',') : 'none');"
+          );
+          // Instrument get: log call + whether the returned promise resolves or rejects
+          chunk.code = chunk.code.replace(
+            'return moduleMap[module]();',
+            `console.log('[ext] get() called with:', JSON.stringify(module));
+        const _p = moduleMap[module]();
+        _p.then(f => { try { console.log('[ext] get() resolved, factory()=>', typeof f()); } catch(e) { console.error('[ext] factory() threw:', e); } }).catch(e => console.error('[ext] get() REJECTED:', e));
+        return _p;`
           );
           chunk.code += `
 if (typeof window !== 'undefined') {
