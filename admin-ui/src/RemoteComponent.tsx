@@ -26,7 +26,6 @@ export default function RemoteComponent({
 }: {
   appState?: AppState;
 }) {
-  console.log('[RemoteComponent] called, tenant:', appState.tenant);
   setToken(appState.token);
 
   return createElement('div', {
@@ -35,7 +34,6 @@ export default function RemoteComponent({
     ref: (el: HTMLElement | null) => {
       if (!el) return;
       if (!roots.has(el)) {
-        console.log('[RemoteComponent] bootstrapping inner React root');
         roots.set(el, createRoot(el));
       }
       roots.get(el)!.render(createElement(App, null));
