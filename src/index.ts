@@ -18,13 +18,31 @@ const DASHBOARD_ORIGIN = 'https://admin.emporix.io';
 const adminCors = cors({ origin: DASHBOARD_ORIGIN, credentials: true });
 
 const app = express();
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'frame-ancestors': ["'self'", DASHBOARD_ORIGIN],
+    },
+  },
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: 'text/xml' }));
 
+// When Emporix loads remoteEntry.js in an iframe, serve index.html instead of raw JS
+app.get('/admin-ui/assets/remoteEntry.js', cors(), (req, res, next) => {
+  const accept = req.headers['accept'] || '';
+  if (accept.includes('text/html')) {
+    res.sendFile(path.join(__dirname, '../src/admin-ui-dist/index.html'));
+  } else {
+    next();
+  }
+});
+
 // Allow Emporix dashboard to load remoteEntry.js and call admin routes cross-origin
-app.use('/admin-ui', adminCors, express.static(path.join(__dirname, '../src/admin-ui-dist')));
+app.use('/admin-ui', cors(), express.static(path.join(__dirname, '../src/admin-ui-dist')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/punchout', punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));

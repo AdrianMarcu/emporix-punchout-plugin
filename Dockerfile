@@ -1,5 +1,13 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Build admin UI
+COPY admin-ui/package*.json ./admin-ui/
+RUN cd admin-ui && npm ci
+COPY admin-ui ./admin-ui
+RUN cd admin-ui && npm run build
+
+# Build server
 COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
