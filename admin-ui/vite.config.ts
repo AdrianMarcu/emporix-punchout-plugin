@@ -27,14 +27,14 @@ export default defineConfig({
   plugins: [
     react(),
     federation({
-      name: 'punchout',
+      name: 'extension',
       filename: 'remoteEntry.js',
       exposes: {
         './RemoteComponent': './src/RemoteComponent',
       },
       shared: ['react', 'react-dom'],
     }),
-    federationWindowShim('punchout'),
+    federationWindowShim('extension'),
   ],
   build: {
     outDir: '../src/admin-ui-dist',
