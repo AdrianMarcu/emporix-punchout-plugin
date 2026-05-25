@@ -16,6 +16,16 @@ function federationWindowShim(scopeName: string): Plugin {
           // is already inside assets/, that resolves to assets/assets/chunk.js → 404.
           // Strip the extra 'assets/' so the path is './chunk.js' (same directory).
           chunk.code = chunk.code.replace(/__federation_import\((['"])\.\/assets\//g, '__federation_import($1./');
+          // Instrument the exported get/init so we can see if Emporix calls them
+          // via dynamic import() rather than via the window['extension'] wrapper.
+          chunk.code = chunk.code.replace(
+            /const get =\(module\) => \{/,
+            "const get =(module) => { console.log('[ext] get() called with:', JSON.stringify(module));"
+          );
+          chunk.code = chunk.code.replace(
+            /const init =\(shareScope\) => \{/,
+            "const init =(shareScope) => { console.log('[ext] init() called, keys:', shareScope ? Object.keys(shareScope).join(',') : 'none');"
+          );
           chunk.code += `
 if (typeof window !== 'undefined') {
   const _get = get;

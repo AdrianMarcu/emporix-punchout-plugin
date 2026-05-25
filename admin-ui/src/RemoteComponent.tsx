@@ -29,6 +29,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export default function RemoteComponent({ appState = { tenant: '', token: '', language: 'en' } }: RemoteComponentProps) {
+  console.log('[RemoteComponent] rendered, tenant:', appState.tenant);
   setToken(appState.token);
   return <ErrorBoundary><App /></ErrorBoundary>;
 }
