@@ -17,6 +17,15 @@ function federationWindowShim(scopeName: string): Plugin {
           // Strip the extra 'assets/' so the path is './chunk.js' (same directory).
           // Fix: strip the extra assets/ so federation imports resolve correctly
           chunk.code = chunk.code.replace(/__federation_import\((['"])\.\/assets\//g, '__federation_import($1./');
+          // Webpack module federation host expects factory() to return the MODULE OBJECT
+          // {default: Component}, not just the component function. Vite federation's
+          // generated .then() returns module.default when all keys are in exportSet,
+          // but webpack's lazy() wrapper then does factory().default = undefined.
+          // Always return the full module so factory().default = RemoteComponent.
+          chunk.code = chunk.code.replace(
+            /Object\.keys\(module\)\.every\(item => exportSet\.has\(item\)\) \? \(\) => module\.default : \(\) => module/g,
+            '() => module'
+          );
           // Instrument init
           chunk.code = chunk.code.replace(
             'const init =(shareScope) => {',
@@ -68,7 +77,11 @@ export default defineConfig({
       exposes: {
         './RemoteComponent': './src/RemoteComponent',
       },
-      shared: ['react', 'react-dom'],
+      // No shared modules: use a single self-contained bundled React.
+      // Sharing React with Emporix's host causes two React instances — the expose
+      // file gets host React via importShared, but App.tsx uses the bundled copy,
+      // which React detects as mismatched instances and refuses to render hooks.
+      shared: {},
     }),
     federationWindowShim('extension'),
   ],
