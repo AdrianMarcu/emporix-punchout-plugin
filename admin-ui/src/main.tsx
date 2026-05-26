@@ -1,5 +1,6 @@
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './global.css';
 import { setToken } from './api';
 
 // In standalone dev mode, read token from URL hash for convenience

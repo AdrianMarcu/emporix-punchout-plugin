@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
+import { sectionTitle, fieldLabel, fieldHint, input, btnPrimary, twoCol } from '../styles';
 
 interface CredentialsForm {
   sharedSecret: string;
@@ -35,26 +36,69 @@ export default function Credentials() {
       });
       setStatus('Saved.');
     } catch {
-      setStatus('Error saving. Check console.');
+      setStatus('Error saving.');
     }
   };
 
   return (
-    <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <label>Shared Secret (leave blank to keep existing)<br />
-        <input type="password" value={form.sharedSecret} onChange={e => setForm({ ...form, sharedSecret: e.target.value })} style={{ width: '100%', padding: 8 }} />
-      </label>
-      <label>Emporix Service Account Client ID<br />
-        <input value={form.clientId} onChange={e => setForm({ ...form, clientId: e.target.value })} style={{ width: '100%', padding: 8 }} />
-      </label>
-      <label>Emporix Service Account Client Secret<br />
-        <input type="password" value={form.clientSecret} onChange={e => setForm({ ...form, clientSecret: e.target.value })} style={{ width: '100%', padding: 8 }} />
-      </label>
-      <label>Storefront Base URL<br />
-        <input value={form.storefrontBaseUrl} onChange={e => setForm({ ...form, storefrontBaseUrl: e.target.value })} style={{ width: '100%', padding: 8 }} />
-      </label>
-      <button type="submit" style={{ padding: '10px 20px', background: '#0066cc', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Save</button>
-      {status && <p>{status}</p>}
+    <form onSubmit={handleSave}>
+      <div style={sectionTitle}>Punchout Credentials</div>
+      <div style={twoCol}>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>
+            Shared Secret <span style={fieldHint}>— leave blank to keep existing</span>
+          </span>
+          <input
+            type="password"
+            value={form.sharedSecret}
+            onChange={e => setForm({ ...form, sharedSecret: e.target.value })}
+            placeholder="Enter new secret…"
+            style={input}
+          />
+        </label>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>Storefront Base URL</span>
+          <input
+            type="text"
+            value={form.storefrontBaseUrl}
+            onChange={e => setForm({ ...form, storefrontBaseUrl: e.target.value })}
+            placeholder="https://your-store.com"
+            style={input}
+          />
+        </label>
+      </div>
+
+      <div style={{ ...sectionTitle, marginTop: 16 }}>Emporix Service Account</div>
+      <div style={twoCol}>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>Client ID</span>
+          <input
+            type="text"
+            value={form.clientId}
+            onChange={e => setForm({ ...form, clientId: e.target.value })}
+            style={input}
+          />
+        </label>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>Client Secret <span style={fieldHint}>— leave blank to keep existing</span></span>
+          <input
+            type="password"
+            value={form.clientSecret}
+            onChange={e => setForm({ ...form, clientSecret: e.target.value })}
+            placeholder="Enter secret…"
+            style={input}
+          />
+        </label>
+      </div>
+
+      <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="submit" style={btnPrimary}>Save</button>
+        {status && (
+          <span style={{ fontSize: 11, color: status.startsWith('Error') ? '#dc2626' : '#16a34a' }}>
+            {status}
+          </span>
+        )}
+      </div>
     </form>
   );
 }
