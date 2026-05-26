@@ -1,4 +1,5 @@
 import { hashSecret } from '../crypto';
+import redis from '../redis';
 
 export interface PluginConfig {
   sharedSecretHash: string;
@@ -11,31 +12,43 @@ export interface PluginConfig {
   buyerMappings: Array<{ buyerOrgId: string; customerGroupId: string }>;
 }
 
-// In-memory store keyed by tenantId — sufficient for demo/PoC.
-// Config survives the process lifetime; persists across requests within a session.
-const store = new Map<string, PluginConfig>();
+const CONFIG_PREFIX = 'punchout:config:';
 
-// Optionally seed from environment variables so config survives redeployments
-function seedFromEnv(_tenantId: string): PluginConfig | null {
-  const clientId = process.env.EMPORIX_CLIENT_ID;
-  const clientSecret = process.env.EMPORIX_CLIENT_SECRET ?? '';
-  const storefrontBaseUrl = process.env.STOREFRONT_BASE_URL ?? '';
-  const sharedSecret = process.env.PUNCHOUT_SHARED_SECRET ?? '';
-  if (!clientId) return null;
+const DEFAULTS: PluginConfig = {
+  sharedSecretHash: '',
+  serviceAccount: { clientId: '', clientSecret: '' },
+  storefrontBaseUrl: '',
+  cxmlEnabled: true,
+  ociEnabled: false,
+  operationAllowed: 'edit',
+  ociOkCode: 'ADDFROMCATALOG',
+  buyerMappings: [],
+};
+
+function seedFromEnv(): Partial<PluginConfig> {
   return {
-    sharedSecretHash: sharedSecret,   // stored as plaintext for demo; verified in punchout route
-    serviceAccount: { clientId, clientSecret },
-    storefrontBaseUrl,
-    cxmlEnabled: true,
-    ociEnabled: false,
-    operationAllowed: 'edit',
-    ociOkCode: 'ADDFROMCATALOG',
-    buyerMappings: [],
+    serviceAccount: {
+      clientId: process.env.EMPORIX_CLIENT_ID ?? '',
+      clientSecret: process.env.EMPORIX_CLIENT_SECRET ?? '',
+    },
+    storefrontBaseUrl: process.env.STOREFRONT_BASE_URL ?? '',
+    // Stored as plaintext; verifySecret handles both plaintext and bcrypt
+    sharedSecretHash: process.env.PUNCHOUT_SHARED_SECRET ?? '',
   };
 }
 
 export async function getConfig(tenantId: string, _accessToken?: string): Promise<PluginConfig | null> {
-  return store.get(tenantId) ?? seedFromEnv(tenantId);
+  try {
+    const raw = await redis.get(`${CONFIG_PREFIX}${tenantId}`);
+    if (raw) {
+      return { ...DEFAULTS, ...JSON.parse(raw) as Partial<PluginConfig> };
+    }
+  } catch {
+    // Redis unavailable — fall through to env seed
+  }
+  const seed = seedFromEnv();
+  if (!seed.serviceAccount?.clientId) return null;
+  return { ...DEFAULTS, ...seed };
 }
 
 export async function saveConfig(
@@ -43,12 +56,12 @@ export async function saveConfig(
   incoming: Omit<PluginConfig, 'sharedSecretHash'> & { sharedSecret?: string },
   _accessToken?: string,
 ): Promise<void> {
-  const existing = store.get(tenantId) ?? seedFromEnv(tenantId);
+  const existing = await getConfig(tenantId).catch(() => null);
 
   const { sharedSecret, ...configFields } = incoming;
 
   const sharedSecretHash = sharedSecret
-    ? await hashSecret(sharedSecret)
+    ? await hashSecret(sharedSecret)   // properly bcrypt-hashed when saved via UI
     : (existing?.sharedSecretHash ?? '');
 
   const rawClientSecret = incoming.serviceAccount.clientSecret;
@@ -56,19 +69,8 @@ export async function saveConfig(
     ? existing.serviceAccount.clientSecret
     : rawClientSecret;
 
-  const defaults: PluginConfig = {
-    sharedSecretHash: '',
-    serviceAccount: { clientId: '', clientSecret: '' },
-    storefrontBaseUrl: '',
-    cxmlEnabled: true,
-    ociEnabled: false,
-    operationAllowed: 'edit',
-    ociOkCode: 'ADDFROMCATALOG',
-    buyerMappings: [],
-  };
-
   const toSave: PluginConfig = {
-    ...defaults,
+    ...DEFAULTS,
     ...(existing ?? {}),
     ...configFields,
     sharedSecretHash,
@@ -78,5 +80,10 @@ export async function saveConfig(
     },
   };
 
-  store.set(tenantId, toSave);
+  try {
+    await redis.set(`${CONFIG_PREFIX}${tenantId}`, JSON.stringify(toSave));
+  } catch {
+    // Redis unavailable — store in memory as last resort
+    console.error('[configStore] Redis unavailable, config not persisted');
+  }
 }

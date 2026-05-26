@@ -38,5 +38,11 @@ export async function hashSecret(secret: string): Promise<string> {
 }
 
 export async function verifySecret(secret: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(secret, hash);
+  if (!hash) return false;
+  // Bcrypt hashes start with $2b$ — if the stored value is plaintext (e.g. seeded
+  // from PUNCHOUT_SHARED_SECRET env var), fall back to direct comparison.
+  if (hash.startsWith('$2b$') || hash.startsWith('$2a$')) {
+    return bcrypt.compare(secret, hash);
+  }
+  return secret === hash;
 }
