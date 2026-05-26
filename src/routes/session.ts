@@ -73,12 +73,14 @@ export function createSessionRouter(tenantId: string): Router {
       // and calls loginBasedOnCustomerToken() — it then finds carts by saas-token.
       let anonTokenData: AnonymousTokenResponse | null = null;
       try {
+        // GET /customerlogin/auth/anonymous/login?client_id=...&hybris-tenant=...
+        // (matches how b2b-showcase accessToken.js calls this endpoint)
         anonTokenData = await getAnonymousTokenFull(
           appConfig.emporix.apiBase,
           appConfig.emporix.clientId,
-          appConfig.emporix.clientSecret,
+          tenantId,
         );
-        console.log('[session] anonymous token obtained, saas_token present:', !!anonTokenData.saas_token);
+        console.log('[session] anonymous token obtained, saas_token present:', !!anonTokenData.saas_token, '| sessionId:', anonTokenData.sessionId);
       } catch (anonErr) {
         console.warn('[session] could not get anonymous token:', anonErr instanceof Error ? anonErr.message : String(anonErr));
       }
@@ -88,9 +90,9 @@ export function createSessionRouter(tenantId: string): Router {
         tenantId,
         appConfig.outboundTimeoutMs,
       );
-      // Use the anonymous login's session_id as the cart session-id so the
+      // Use the anonymous login's sessionId as the cart session-id so the
       // storefront's syncCart(sessionId) finds this cart after loginBasedOnCustomerToken().
-      const cartSessionId = anonTokenData?.session_id ?? session.sessionId;
+      const cartSessionId = anonTokenData?.sessionId ?? session.sessionId;
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
         cartSessionId,

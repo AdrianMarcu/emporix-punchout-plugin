@@ -46,39 +46,37 @@ export class TokenCache {
 
 export interface AnonymousTokenResponse {
   access_token: string;
-  saas_token: string;
+  saas_token?: string;
   expires_in: number;
-  session_id: string;
+  /** camelCase as returned by GET /customerlogin/auth/anonymous/login */
+  sessionId: string;
 }
 
 /**
  * Anonymous customer login via the b2b-showcase endpoint.
- * Returns access_token, saas_token, session_id, expires_in.
+ * Returns access_token, saas_token, sessionId, expires_in.
  *
  * The storefront reads ?customerToken=&saasToken=&customerTokenExpiresIn= and
  * calls loginBasedOnCustomerToken(), which restores the anonymous session.
- * The cart must be created with session-id=<session_id> so the storefront's
+ * The cart must be created with session-id=<sessionId> so the storefront's
  * syncCart(sessionId) can find it after login.
  *
- * Endpoint: POST /customerlogin/auth/anonymous/login  (NOT /token — that
- * returns a plain-string opaque token used only for password-reset operations)
+ * Endpoint: GET /customerlogin/auth/anonymous/login?client_id=...&hybris-tenant=...
+ * (The b2b-showcase accessToken.js uses a GET with query params, not POST form body)
  */
 export async function getAnonymousTokenFull(
   apiBase: string,
   clientId: string,
-  clientSecret: string,
+  tenantId: string,
 ): Promise<AnonymousTokenResponse> {
-  const params = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
   let res: { data: AnonymousTokenResponse };
   try {
-    res = await axios.post<AnonymousTokenResponse>(
+    res = await axios.get<AnonymousTokenResponse>(
       `${apiBase}/customerlogin/auth/anonymous/login`,
-      params.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
+      {
+        params: { client_id: clientId, 'hybris-tenant': tenantId },
+        timeout: 5000,
+      },
     );
   } catch (err) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,6 +85,6 @@ export async function getAnonymousTokenFull(
     const status = (err as any)?.response?.status;
     throw new Error(`Failed to get anonymous login (HTTP ${status}): ${JSON.stringify(detail)}`, { cause: err });
   }
-  console.log('[getAnonymousTokenFull] keys:', Object.keys(res.data).join(', '), '| session_id:', res.data.session_id, '| saas_token present:', !!res.data.saas_token);
+  console.log('[getAnonymousTokenFull] raw keys:', Object.keys(res.data).join(', '), '| sessionId:', res.data.sessionId, '| saas_token present:', !!res.data.saas_token);
   return res.data;
 }
