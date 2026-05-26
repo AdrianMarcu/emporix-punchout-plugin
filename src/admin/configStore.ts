@@ -17,14 +17,16 @@ export interface PluginConfig {
 const store = new Map<string, PluginConfig>();
 
 // Optionally seed from environment variables so config survives redeployments
-function seedFromEnv(tenantId: string): PluginConfig | null {
+function seedFromEnv(_tenantId: string): PluginConfig | null {
   const clientId = process.env.EMPORIX_CLIENT_ID;
-  const storefrontBaseUrl = process.env.STOREFRONT_BASE_URL;
-  if (!clientId && !storefrontBaseUrl) return null;
+  const clientSecret = process.env.EMPORIX_CLIENT_SECRET ?? '';
+  const storefrontBaseUrl = process.env.STOREFRONT_BASE_URL ?? '';
+  const sharedSecret = process.env.PUNCHOUT_SHARED_SECRET ?? '';
+  if (!clientId) return null;
   return {
-    sharedSecretHash: '',
-    serviceAccount: { clientId: clientId ?? '', clientSecret: '' },
-    storefrontBaseUrl: storefrontBaseUrl ?? '',
+    sharedSecretHash: sharedSecret,   // stored as plaintext for demo; verified in punchout route
+    serviceAccount: { clientId, clientSecret },
+    storefrontBaseUrl,
     cxmlEnabled: true,
     ociEnabled: false,
     operationAllowed: 'edit',
