@@ -118,9 +118,14 @@ export function createSessionRouter(tenantId: string): Router {
             cfg.punchoutCustomer.password,
             anonTokenData.access_token,
           );
-          // Use the customer's own credentials for cart creation — creates a customer-owned cart
+          // Use the customer JWT for cart creation — creates a customer-owned cart.
+          // Do NOT pass saasToken as a cart header: Emporix has a unique index on saasToken
+          // and the same customer saasToken persists across logins, so a second session
+          // would cause HTTP 409 "Duplicate key found for a unique index".
+          // The customer JWT alone is sufficient to own the cart; saasToken is only
+          // needed in the redirect URL so the storefront can call loginBasedOnCustomerToken.
           cartBearerToken = `Bearer ${customerLogin.accessToken}`;
-          cartSaasToken = customerLogin.saasToken;
+          cartSaasToken = undefined;
           redirectCustomerToken = customerLogin.accessToken;
           redirectSaasToken = customerLogin.saasToken;
           redirectExpiresIn = customerLogin.expiresIn;
