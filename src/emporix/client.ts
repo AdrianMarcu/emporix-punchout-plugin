@@ -14,14 +14,18 @@ export class EmporixClient {
 
   async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
     const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
+    const body = { 'session-id': sessionId, sessionId, currency: 'USD', customerGroup: customerGroupId || undefined };
+    console.log('[createGuestCart] POST', url, JSON.stringify(body));
     try {
       const res = await axios.post<{ cartId: string }>(
-        url,
-        { sessionId, currency: 'USD', customerGroup: customerGroupId || undefined },
+        url, body,
         { ...this.axiosOpts, headers: { Authorization: accessToken } },
       );
       return res.data.cartId;
     } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.response?.data;
+      console.error('[createGuestCart] failed:', JSON.stringify(detail));
       throw new Error('Failed to create Emporix cart', { cause: err });
     }
   }
