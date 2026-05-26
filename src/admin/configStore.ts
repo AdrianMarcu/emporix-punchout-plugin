@@ -86,6 +86,13 @@ export async function getConfig(tenantId: string, _accessToken?: string): Promis
     cfg.storefrontClientId = sanitizeClientId(cfg.storefrontClientId);
   }
 
+  if (process.env.PUNCHOUT_USER_EMAIL) {
+    cfg.punchoutCustomer = {
+      email: process.env.PUNCHOUT_USER_EMAIL,
+      password: process.env.PUNCHOUT_USER_PASSWORD ?? '',
+    };
+  }
+
   return cfg;
 }
 
