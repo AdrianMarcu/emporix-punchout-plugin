@@ -78,9 +78,15 @@ export function createSessionRouter(tenantId: string): Router {
         secure: process.env.NODE_ENV === 'production',
       });
       res.redirect(`${cfg.storefrontBaseUrl}?cartId=${cartId}`);
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const httpStatus = (err as any)?.cause?.response?.status;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const httpBody = JSON.stringify((err as any)?.cause?.response?.data ?? '');
+      console.error('[session] cart init failed:', msg, 'HTTP', httpStatus, httpBody);
       res.status(502).send(
-        '<html><body><p>Failed to initialize cart. Please return to your procurement system and try again.</p></body></html>'
+        `<html><body><p>Failed to initialize cart: ${msg} (HTTP ${httpStatus ?? '?'}: ${httpBody})</p></body></html>`
       );
     }
   });
