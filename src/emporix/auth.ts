@@ -29,7 +29,11 @@ export class TokenCache {
       );
       data = res.data;
     } catch (err) {
-      throw new Error('Emporix auth failed', { cause: err });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const httpStatus = (err as any)?.response?.status;
+      throw new Error(`Emporix auth failed (HTTP ${httpStatus}): ${JSON.stringify(detail)}`, { cause: err });
     }
 
     this.token = data.access_token;

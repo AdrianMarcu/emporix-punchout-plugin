@@ -85,8 +85,13 @@ export function createAdminRouter(): Router {
       res.json(groups);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[admin/customer-groups] failed:', msg);
-      res.status(502).json({ error: 'Failed to fetch customer groups', detail: msg });
+      const cause = (err instanceof Error && err.cause instanceof Error) ? err.cause.message : undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = (err as any)?.cause?.response?.status;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (err as any)?.cause?.response?.data;
+      console.error('[admin/customer-groups] failed:', msg, cause, status, data);
+      res.status(502).json({ error: 'Failed to fetch customer groups', detail: msg, cause, httpStatus: status, httpBody: data });
     }
   });
 
