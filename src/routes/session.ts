@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { SessionStore } from '../session/store';
 import { EmporixClient } from '../emporix/client';
-import { TokenCache, getAnonymousTokenFull } from '../emporix/auth';
+import { TokenCache, getAnonymousTokenFull, type AnonymousTokenResponse } from '../emporix/auth';
 import { getConfig } from '../admin/configStore';
 import type { PluginConfig } from '../admin/configStore';
 import { config as appConfig } from '../config';
@@ -71,7 +71,7 @@ export function createSessionRouter(tenantId: string): Router {
       // Get anonymous customer token so the storefront can adopt the cart.
       // The b2b-showcase reads ?customerToken=&saasToken=&customerTokenExpiresIn=
       // and calls loginBasedOnCustomerToken() — it then finds carts by saas-token.
-      let anonTokenData: { access_token: string; saas_token: string; expires_in: number } | null = null;
+      let anonTokenData: AnonymousTokenResponse | null = null;
       try {
         anonTokenData = await getAnonymousTokenFull(
           appConfig.emporix.apiBase,
