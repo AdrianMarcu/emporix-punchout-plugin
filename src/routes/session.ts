@@ -24,18 +24,22 @@ export function createSessionRouter(tenantId: string): Router {
 
   router.get('/:token', async (req: Request, res: Response) => {
     const { token } = req.params;
-    const sessionId = await store.consumeToken(token);
+    console.log('[session] GET /:token —', token.slice(0, 8) + '…');
 
+    const sessionId = await store.consumeToken(token);
     if (!sessionId) {
+      console.warn('[session] token not found or expired');
       res.status(410).send(expiredPage());
       return;
     }
 
     const session = await store.getSession(sessionId);
     if (!session) {
+      console.warn('[session] session not found:', sessionId);
       res.status(410).send(expiredPage());
       return;
     }
+    console.log('[session] session loaded — protocol:', session.protocol, 'sessionId:', sessionId, 'customerGroupId:', session.customerGroupId);
 
     let cfg: PluginConfig | null = null;
     try {
@@ -46,9 +50,11 @@ export function createSessionRouter(tenantId: string): Router {
     }
 
     if (!cfg) {
+      console.error('[session] plugin config missing');
       res.status(503).send('<html><body><p>Plugin not configured. Please contact the supplier.</p></body></html>');
       return;
     }
+    console.log('[session] config loaded — storefrontBaseUrl:', cfg.storefrontBaseUrl);
 
     try {
       if (!serviceAccountCache || serviceAccountClientId !== cfg.serviceAccount.clientId) {
@@ -66,14 +72,13 @@ export function createSessionRouter(tenantId: string): Router {
         tenantId,
         appConfig.outboundTimeoutMs,
       );
-      // Anonymous customer context is passed via X-Anonymous-Customer-Unique-Id header
-      // (SAP/Hybris/Emporix convention) — the service account Bearer token handles auth,
-      // the header tells the cart API which anonymous session this cart belongs to.
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
         session.sessionId,
         `Bearer ${saToken}`,
       );
+      console.log('[session] cart created — cartId:', cartId);
+
       await store.updateCartId(sessionId, cartId);
       res.cookie('punchout_session', sessionId, {
         httpOnly: true,
@@ -81,7 +86,10 @@ export function createSessionRouter(tenantId: string): Router {
         maxAge: appConfig.sessionTtlSeconds * 1000,
         secure: process.env.NODE_ENV === 'production',
       });
-      res.redirect(`${cfg.storefrontBaseUrl}?cartId=${cartId}`);
+
+      const redirectUrl = `${cfg.storefrontBaseUrl}?cartId=${cartId}`;
+      console.log('[session] redirecting to:', redirectUrl);
+      res.redirect(redirectUrl);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
