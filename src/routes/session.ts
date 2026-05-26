@@ -113,14 +113,11 @@ export function createSessionRouter(tenantId: string): Router {
         secure: process.env.NODE_ENV === 'production',
       });
 
-      // Build redirect URL — include anonymous customer credentials so the
-      // storefront can call loginBasedOnCustomerToken() and find the cart.
+      // Redirect to storefront — do NOT pass customerToken/saasToken/customerTokenExpiresIn.
+      // Those params trigger loginBasedOnCustomerToken() which calls /customer/me with an
+      // anonymous token and crashes (401). The storefront creates its own anonymous session
+      // and cart; our pre-created cartId is passed as a reference only.
       const params = new URLSearchParams({ cartId });
-      if (anonTokenData) {
-        params.set('customerToken', anonTokenData.access_token);
-        params.set('saasToken', anonTokenData.saas_token ?? '');
-        params.set('customerTokenExpiresIn', String(anonTokenData.expires_in));
-      }
       const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
       console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
       res.redirect(redirectUrl);
