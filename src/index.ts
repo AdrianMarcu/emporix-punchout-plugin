@@ -13,6 +13,8 @@ const DASHBOARD_ORIGIN = 'https://admin.emporix.io';
 const adminCors = cors({ origin: DASHBOARD_ORIGIN, credentials: true });
 
 const app = express();
+// Trust Railway's reverse proxy so rate-limiter can read the real client IP
+app.set('trust proxy', 1);
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: {
