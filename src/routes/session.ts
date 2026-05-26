@@ -212,9 +212,18 @@ export function createSessionRouter(tenantId: string): Router {
       });
 
       // Step 4: Build the redirect URL.
-      // Pass customerToken/saasToken/customerTokenExpiresIn so the storefront calls
-      // loginBasedOnCustomerToken() → second syncAuth() → sessionId updates in React state.
-      const params = new URLSearchParams({ cartId });
+      // When using a customer JWT we deliberately omit cartId from the URL.
+      // Passing cartId causes the storefront to call an Emporix "merge cart" API,
+      // which returns 400 "Cart cannot be merged into itself" because the cartId
+      // is already the customer's active cart. Without cartId the storefront simply
+      // calls getCartAccount({ customerId }) after loginBasedOnCustomerToken() and
+      // finds the same cart naturally — no merge needed.
+      // The cartId is stored in the session (updateCartId above) for the return flow.
+      const params = new URLSearchParams();
+      if (!redirectCustomerToken) {
+        // Anonymous fallback: storefront needs cartId to find the anonymous cart by session.
+        params.set('cartId', cartId);
+      }
       if (redirectCustomerToken && redirectSaasToken) {
         params.set('customerToken', redirectCustomerToken);
         params.set('saasToken', redirectSaasToken);
