@@ -14,11 +14,11 @@ export class EmporixClient {
 
   async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
     const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
-    // Emporix (SAP/Hybris lineage) identifies anonymous customers via the
-    // X-Anonymous-Customer-Unique-Id header when using a service-account token.
-    // The sessionId body field is accepted by some versions but the header is
-    // the canonical approach and works across all Emporix API versions.
-    const body: Record<string, unknown> = { currency: 'USD' };
+    // Emporix cart API contract (confirmed from docs):
+    //   - session-id goes in a REQUEST HEADER, not the body
+    //   - saas-token header can be omitted for guest/anonymous carts
+    //   - body uses siteCode + currency, not sessionId/customerId
+    const body: Record<string, unknown> = { currency: 'USD', siteCode: 'main' };
     if (customerGroupId) body.customerGroup = customerGroupId;
     try {
       const res = await axios.post<{ cartId: string }>(
@@ -27,7 +27,7 @@ export class EmporixClient {
           ...this.axiosOpts,
           headers: {
             Authorization: accessToken,
-            'X-Anonymous-Customer-Unique-Id': sessionId,
+            'session-id': sessionId,
             'Content-Type': 'application/json',
           },
         },
