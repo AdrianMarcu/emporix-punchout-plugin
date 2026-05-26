@@ -26,7 +26,7 @@ app.use(helmet({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.text({ type: 'text/xml' }));
+app.use(express.text({ type: ['text/xml', 'application/xml', '*/xml'] }));
 
 // When Emporix loads remoteEntry.js in an iframe, serve index.html instead of raw JS
 app.get('/admin-ui/assets/remoteEntry.js', cors(), (req, res, next) => {

@@ -49,12 +49,18 @@ export function createPunchoutRouter(tenantId: string): Router {
   );
 
   router.post('/cxml/setup', async (req: Request, res: Response) => {
-    const xmlBody = req.body as string;
+    // Body may arrive as string (text/xml parsed) or Buffer (raw) — normalise
+    const raw = req.body;
+    const xmlBody = typeof raw === 'string' ? raw
+      : Buffer.isBuffer(raw) ? raw.toString('utf8')
+      : typeof raw === 'object' ? JSON.stringify(raw)   // should not happen
+      : String(raw ?? '');
     let parsed;
     try {
       parsed = parsePunchOutSetupRequest(xmlBody);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Parse error';
+      console.error('[punchout/cxml/setup] parse error:', msg, '| body type:', typeof raw, '| first 200:', xmlBody.slice(0, 200));
       res.status(400).type('text/xml').send(buildCxmlError(400, msg));
       return;
     }
