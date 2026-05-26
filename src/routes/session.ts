@@ -131,24 +131,29 @@ export function createSessionRouter(tenantId: string): Router {
           redirectCustomerToken = customerLogin.accessToken;
           redirectSaasToken = customerLogin.saasToken;
           redirectExpiresIn = customerLogin.expiresIn;
-          console.log('[session] customer login succeeded — cart will be created as customer-owned (not anonymous)');
+          console.log('[session] customer login succeeded — will find or create customer-owned cart');
 
-          // Discover existing carts for this customer (used as fallback if cart creation hits 409).
-          // Emporix soft-deletes carts, so DELETE may not clear the unique index — we keep the
-          // list so we can reuse an existing cart if creation still fails with 409.
+          // Customer login auto-creates a cart in Emporix, so direct cart creation
+          // always hits 409. Find the existing cart first using multiple query strategies;
+          // only fall back to explicit creation if nothing is found.
           try {
             const me = await emporixClient.getCustomerMe(cartBearerToken);
             const customerNumber = me.customerNumber;
             console.log('[session] punchout customer number:', customerNumber);
-            existingCustomerCartIds = await emporixClient.listCartIdsByCustomer(
+            const foundId = await emporixClient.findCustomerCartId(
               customerNumber,
+              cartBearerToken,
               `Bearer ${saToken}`,
+              anonTokenData.sessionId,
             );
-            if (existingCustomerCartIds.length > 0) {
-              console.log(`[session] found ${existingCustomerCartIds.length} existing cart(s) for customer ${customerNumber} — will reuse on 409`);
+            if (foundId) {
+              existingCustomerCartIds = [foundId];
+              console.log('[session] existing customer cart found — will use:', foundId);
+            } else {
+              console.log('[session] no existing cart found — will attempt creation');
             }
           } catch (lookupErr) {
-            console.warn('[session] existing-cart lookup failed:', lookupErr instanceof Error ? lookupErr.message : String(lookupErr));
+            console.warn('[session] cart lookup error:', lookupErr instanceof Error ? lookupErr.message : String(lookupErr));
           }
         } catch (loginErr) {
           console.warn('[session] punchout customer login failed:', loginErr instanceof Error ? loginErr.message : String(loginErr));
@@ -158,27 +163,43 @@ export function createSessionRouter(tenantId: string): Router {
         console.warn('[session] no punchoutCustomer configured — set PUNCHOUT_USER_EMAIL/PUNCHOUT_USER_PASSWORD or configure via admin UI');
       }
 
-      // Step 3: Create the cart using whichever credentials we have.
-      // On 409 (Emporix soft-deleted carts keep their unique index), fall back to reusing
-      // the existing cart — it will be empty from a previous abandoned punchout session.
+      // Step 3: Use the existing customer cart if found, otherwise create one.
+      // Emporix auto-creates a cart on customer login, so POST /carts with a customer
+      // JWT always hits 409. We find it first; creation is a fallback for fresh accounts.
       const cartSessionId = anonTokenData?.sessionId ?? session.sessionId;
       let cartId: string;
-      try {
-        cartId = await emporixClient.createGuestCart(
-          session.customerGroupId,
-          cartSessionId,
-          cartBearerToken,
-          cartSaasToken,
-        );
-        console.log('[session] cart created — cartId:', cartId);
-      } catch (createErr: unknown) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const httpStatus = (createErr as any)?.cause?.response?.status;
-        if (httpStatus === 409 && existingCustomerCartIds.length > 0) {
-          cartId = existingCustomerCartIds[0];
-          console.log('[session] 409 on cart creation — reusing existing cart:', cartId);
-        } else {
-          throw createErr;
+      if (existingCustomerCartIds.length > 0) {
+        cartId = existingCustomerCartIds[0];
+        console.log('[session] using existing customer cart:', cartId);
+      } else {
+        try {
+          cartId = await emporixClient.createGuestCart(
+            session.customerGroupId,
+            cartSessionId,
+            cartBearerToken,
+            cartSaasToken,
+          );
+          console.log('[session] cart created — cartId:', cartId);
+        } catch (createErr: unknown) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const httpStatus = (createErr as any)?.cause?.response?.status;
+          if (httpStatus === 409) {
+            // Last-ditch: retry find (may have appeared since the earlier lookup)
+            const retryId = await emporixClient.findCustomerCartId(
+              '',  // customerNumber unknown at this point; strategies without it will still run
+              cartBearerToken,
+              `Bearer ${saToken}`,
+              cartSessionId,
+            );
+            if (retryId) {
+              cartId = retryId;
+              console.log('[session] 409 fallback — found cart on retry:', cartId);
+            } else {
+              throw createErr;
+            }
+          } else {
+            throw createErr;
+          }
         }
       }
 

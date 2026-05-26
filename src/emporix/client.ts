@@ -76,40 +76,53 @@ export class EmporixClient {
   }
 
   /**
-   * List cart IDs for a specific customer using the service account token.
-   * Uses ?customerId= query param so the service account can see any customer's carts.
-   * Never throws — returns [] on error.
+   * Find the active cart for a customer, trying multiple query strategies.
+   * Emporix customer login auto-creates a cart that may not be visible via
+   * ?customerId= alone. We try several approaches and return the first hit.
+   * Never throws — returns null when no cart is found.
    */
-  async listCartIdsByCustomer(customerId: string, serviceAccountBearer: string): Promise<string[]> {
-    try {
-      const res = await axios.get(
-        `${this.apiBase}/cart/${this.tenantId}/carts`,
-        {
-          ...this.axiosOpts,
-          headers: { Authorization: serviceAccountBearer },
-          params: { customerId },
-        },
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = res.data as any;
-      console.log('[listCartIdsByCustomer] response keys:', raw && typeof raw === 'object' ? Object.keys(raw).join(', ') : String(raw));
-      console.log('[listCartIdsByCustomer] response preview:', JSON.stringify(raw).slice(0, 400));
-      const carts: unknown[] = Array.isArray(raw) ? raw
-        : Array.isArray(raw?.data) ? raw.data
-        : Array.isArray(raw?.items) ? raw.items
-        : Array.isArray(raw?.carts) ? raw.carts
-        : Array.isArray(raw?.results) ? raw.results
-        : Array.isArray(raw?.content) ? raw.content
-        : (raw?.id || raw?.cartId) ? [raw]   // single cart object returned directly
-        : [];
-      console.log('[listCartIdsByCustomer] parsed cart count:', carts.length);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return carts.map((c: any) => c.id || c.cartId).filter(Boolean);
-    } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      console.warn('[listCartIdsByCustomer] failed:', (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err)));
-      return [];
+  async findCustomerCartId(
+    customerNumber: string,
+    customerBearer: string,
+    serviceAccountBearer: string,
+    anonymousSessionId: string,
+  ): Promise<string | null> {
+    const strategies: Array<{ label: string; bearer: string; params: Record<string, string> }> = [
+      // Customer's own JWT with no filter — most natural "what's my cart?" query
+      { label: 'customerJWT/noParams', bearer: customerBearer, params: {} },
+      // Service account with customerId
+      { label: 'SA/customerId', bearer: serviceAccountBearer, params: { customerId: customerNumber } },
+      // Service account with customerId + siteCode
+      { label: 'SA/customerId+siteCode', bearer: serviceAccountBearer, params: { customerId: customerNumber, siteCode: 'main' } },
+      // Service account with the anonymous sessionId (login may bind anon session → customer cart)
+      { label: 'SA/sessionId', bearer: serviceAccountBearer, params: { sessionId: anonymousSessionId } },
+    ];
+
+    for (const s of strategies) {
+      try {
+        const res = await axios.get(
+          `${this.apiBase}/cart/${this.tenantId}/carts`,
+          { ...this.axiosOpts, headers: { Authorization: s.bearer }, params: s.params },
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = res.data as any;
+        const carts: unknown[] = Array.isArray(raw) ? raw
+          : Array.isArray(raw?.data) ? raw.data
+          : Array.isArray(raw?.items) ? raw.items
+          : Array.isArray(raw?.carts) ? raw.carts
+          : (raw?.id || raw?.cartId) ? [raw]
+          : [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const id = carts.map((c: any) => c.id || c.cartId).find(Boolean);
+        console.log(`[findCustomerCartId] strategy=${s.label} → ${id ? 'found: ' + id : 'no result'}`);
+        if (id) return id;
+      } catch (err) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const status = (err as any)?.response?.status;
+        console.log(`[findCustomerCartId] strategy=${s.label} → HTTP ${status ?? 'err'}`);
+      }
     }
+    return null;
   }
 
   /** Delete a cart by ID (service account token recommended). Ignores 404. */
