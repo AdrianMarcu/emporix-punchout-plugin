@@ -21,7 +21,7 @@ export class EmporixClient {
     const body: Record<string, unknown> = { currency: 'USD', siteCode: 'main' };
     if (customerGroupId) body.customerGroup = customerGroupId;
     try {
-      const res = await axios.post<Record<string, unknown>>(
+      const res = await axios.post<{ cartId: string }>(
         url, body,
         {
           ...this.axiosOpts,
@@ -32,15 +32,9 @@ export class EmporixClient {
           },
         },
       );
-      // Log full response so we can identify the correct field name
-      console.log('[createGuestCart] HTTP', res.status, 'headers:', JSON.stringify(res.headers));
-      console.log('[createGuestCart] body:', JSON.stringify(res.data));
-      // Emporix may return 'id', 'cartId', or a Location header on 201
-      const cartId =
-        (res.data['id'] as string | undefined) ??
-        (res.data['cartId'] as string | undefined) ??
-        (res.headers['location'] as string | undefined)?.split('/').pop();
-      if (!cartId) throw new Error(`Cart created but could not find cart ID. Status=${res.status} body=${JSON.stringify(res.data)} location=${res.headers['location']}`);
+      // Emporix cart creation returns { cartId, yrn } on HTTP 201
+      const cartId = res.data.cartId;
+      if (!cartId) throw new Error(`Cart created but no cartId in response: ${JSON.stringify(res.data)}`);
       return cartId;
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
