@@ -218,7 +218,14 @@ export function createSessionRouter(tenantId: string): Router {
       // calls getCartAccount({ customerId }) after loginBasedOnCustomerToken() and
       // finds the same cart naturally — no merge needed.
       // The cartId is stored in the session (updateCartId above) for the return flow.
+      // Build redirect to the plugin's shop wrapper page.
+      // The wrapper loads the storefront in a full-screen iframe and shows the
+      // "Return Cart to Procurement" button in a banner — no storefront changes needed.
+      // The 'session' param identifies the punchout session for the return flow.
+      // All other params (customerToken, saasToken, cartId) are forwarded to the
+      // iframe src so the storefront can authenticate the user on load.
       const params = new URLSearchParams();
+      params.set('session', sessionId);
       if (!redirectCustomerToken) {
         // Anonymous fallback: storefront needs cartId to find the anonymous cart by session.
         params.set('cartId', cartId);
@@ -228,11 +235,8 @@ export function createSessionRouter(tenantId: string): Router {
         params.set('saasToken', redirectSaasToken);
         params.set('customerTokenExpiresIn', String(redirectExpiresIn));
       }
-      // Widget script reads this from the URL on first load and stores it in sessionStorage.
-      // This lets the "Return Cart to Procurement" button work even cross-domain.
-      params.set('punchoutSessionId', sessionId);
-      const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
-      console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
+      const redirectUrl = `${appConfig.pluginHost}/shop?${params.toString()}`;
+      console.log('[session] redirecting to shop wrapper:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
       res.redirect(redirectUrl);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
