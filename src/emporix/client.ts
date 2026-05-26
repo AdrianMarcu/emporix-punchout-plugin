@@ -21,7 +21,7 @@ export class EmporixClient {
     const body: Record<string, unknown> = { currency: 'USD', siteCode: 'main' };
     if (customerGroupId) body.customerGroup = customerGroupId;
     try {
-      const res = await axios.post<{ cartId: string }>(
+      const res = await axios.post<{ id: string; cartId?: string }>(
         url, body,
         {
           ...this.axiosOpts,
@@ -32,7 +32,10 @@ export class EmporixClient {
           },
         },
       );
-      return res.data.cartId;
+      // Emporix returns the cart identifier as 'id' (not 'cartId')
+      const cartId = res.data.id ?? res.data.cartId;
+      if (!cartId) throw new Error(`Cart created but no id in response: ${JSON.stringify(res.data)}`);
+      return cartId;
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detail = (err as any)?.response?.data;
