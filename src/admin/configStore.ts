@@ -1,5 +1,4 @@
-import { encrypt, decrypt, hashSecret } from '../crypto';
-import { config as appConfig } from '../config';
+import { hashSecret } from '../crypto';
 
 export interface PluginConfig {
   sharedSecretHash: string;
