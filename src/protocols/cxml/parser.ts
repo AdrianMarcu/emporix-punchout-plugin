@@ -1,15 +1,17 @@
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
 import type { CxmlSetupRequest } from './types';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
 
 export function parsePunchOutSetupRequest(xml: string): CxmlSetupRequest {
-  const validation = XMLValidator.validate(xml);
-  if (validation !== true) {
-    throw new Error('Invalid cXML');
+  // Skip strict validation — procurement systems often send slightly non-conformant XML.
+  // Attempt to parse directly and let field-level checks catch structural problems.
+  let doc: Record<string, unknown>;
+  try {
+    doc = parser.parse(xml) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(`cXML parse failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  const doc = parser.parse(xml) as Record<string, unknown>;
 
   const root = doc['cXML'] as Record<string, unknown> | undefined;
   if (!root) throw new Error('Invalid cXML: missing root element');
