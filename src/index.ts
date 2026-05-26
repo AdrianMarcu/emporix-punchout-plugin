@@ -5,7 +5,6 @@ import cors from 'cors';
 import { config } from './config';
 import { createPunchoutRouter } from './routes/punchout';
 import { createSessionRouter } from './routes/session';
-import { createShopRouter } from './routes/shop';
 import { createAdminRouter } from './admin/router';
 import { punchoutRateLimiter } from './middleware/rateLimiter';
 import { createWidgetRouter } from './routes/widget';
@@ -52,7 +51,6 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // and the demo simulator — allow any origin.
 app.use('/punchout', cors(), punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
-app.use('/shop', createShopRouter(config.emporix.tenantId));
 app.use('/admin', adminCors, createAdminRouter());
 app.use('/', createWidgetRouter());
 

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; padding: 24px; }
+
+  h2 { font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 4px; }
+  .hint { font-size: 12px; color: #888; margin-bottom: 20px; }
+
+  .panel { background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; width: 680px; }
+
+  /* Tab bar — matches Emporix: thin underline active tab, small text */
+  .tabs { display: flex; border-bottom: 1px solid #e0e0e0; padding: 0 16px; }
+  .tab { padding: 10px 14px; font-size: 12px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: #0066cc; border-bottom-color: #0066cc; font-weight: 500; }
+
+  .tab-content { padding: 16px; }
+
+  /* Section heading */
+  .section-title { font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+
+  /* Form rows */
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; color: #555; margin-bottom: 3px; }
+  .field input, .field select {
+    width: 100%; height: 28px; padding: 0 8px;
+    border: 1px solid #d4d4d4; border-radius: 3px;
+    font-size: 12px; color: #333; background: #fff;
+  }
+  .field input:focus { outline: none; border-color: #0066cc; }
+  .field input[type=password]:not(:placeholder-shown) { letter-spacing: 1px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-hint { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+  /* Button — compact, matches Emporix primary action */
+  .btn-primary {
+    height: 28px; padding: 0 12px;
+    background: #0066cc; color: #fff;
+    border: none; border-radius: 3px;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+  }
+  .btn-secondary {
+    height: 28px; padding: 0 10px;
+    background: #fff; color: #333;
+    border: 1px solid #d4d4d4; border-radius: 3px;
+    font-size: 12px; cursor: pointer;
+  }
+  .btn-row { display: flex; gap: 8px; margin-top: 14px; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { font-size: 11px; font-weight: 600; color: #888; text-align: left; padding: 6px 8px; border-bottom: 1px solid #e8e8e8; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f0f0f0; color: #333; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; padding: 1px 6px; background: #e8f0fe; color: #0066cc; border-radius: 10px; font-size: 10px; }
+
+  /* Add row form inline */
+  .add-row { display: flex; gap: 8px; align-items: flex-end; padding-top: 12px; border-top: 1px solid #f0f0f0; margin-top: 4px; }
+  .add-row .field { margin-bottom: 0; }
+  .add-row input { width: 180px; }
+  .add-row select { width: 180px; }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+  .toggle-label { font-size: 12px; color: #333; flex: 1; }
+  .toggle-sub { font-size: 11px; color: #999; }
+  .toggle-switch { width: 32px; height: 18px; background: #0066cc; border-radius: 9px; position: relative; }
+  .toggle-switch::after { content:''; position:absolute; width:14px; height:14px; background:#fff; border-radius:50%; top:2px; right:2px; }
+  .toggle-switch.off { background: #d0d0d0; }
+  .toggle-switch.off::after { right: auto; left:2px; }
+
+  /* Code box */
+  .code-box { background: #f7f7f7; border: 1px solid #e8e8e8; border-radius: 3px; padding: 10px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #444; line-height: 1.6; max-height: 120px; overflow: auto; white-space: pre-wrap; }
+  .status-ok { font-size: 11px; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 3px; padding: 4px 8px; display: inline-block; margin-top: 8px; }
+
+  /* Tab switcher logic */
+  .tab-body { display: none; }
+  .tab-body.active { display: block; }
+
+  .label-note { font-size: 10px; color: #aaa; font-weight: 400; }
+</style>
+</head>
+<body>
+
+<h2>Redesigned admin panel — Emporix dashboard style</h2>
+<p class="hint">Compact tabs, 28px inputs/buttons, small type. Click the tabs to preview all four screens.</p>
+
+<div class="panel">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('credentials',this)">Credentials</div>
+    <div class="tab" onclick="switchTab('buyers',this)">Buyer Mappings</div>
+    <div class="tab" onclick="switchTab('protocol',this)">Protocol Settings</div>
+    <div class="tab" onclick="switchTab('test',this)">Connection Test</div>
+  </div>
+
+  <!-- CREDENTIALS -->
+  <div class="tab-body active" id="tab-credentials">
+    <div class="tab-content">
+      <div class="section-title">Punchout Credentials</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Shared Secret <span class="label-note">— leave blank to keep existing</span></label>
+          <input type="password" placeholder="Enter new secret…">
+        </div>
+        <div class="field">
+          <label>Storefront Base URL</label>
+          <input type="text" placeholder="https://your-store.com">
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:14px">Emporix Service Account</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Client ID</label>
+          <input type="text" value="emporix-sa-client-id">
+        </div>
+        <div class="field">
+          <label>Client Secret</label>
+          <input type="password" placeholder="Enter secret…">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUYER MAPPINGS -->
+  <div class="tab-body" id="tab-buyers">
+    <div class="tab-content">
+      <div class="section-title">Buyer → Customer Group Mappings</div>
+      <table>
+        <thead>
+          <tr><th>Buyer Org ID</th><th>Customer Group</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ariba-acme-corp</td><td><span class="tag">B2B Enterprise</span></td></tr>
+          <tr><td>coupa-emea-01</td><td><span class="tag">EMEA Partners</span></td></tr>
+        </tbody>
+      </table>
+      <div class="add-row">
+        <div class="field">
+          <label>Buyer Org ID</label>
+          <input type="text" placeholder="org-identifier">
+        </div>
+        <div class="field">
+          <label>Customer Group</label>
+          <select><option>Select…</option><option>B2B Enterprise</option><option>EMEA Partners</option></select>
+        </div>
+        <button class="btn-primary" style="margin-bottom:1px">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROTOCOL SETTINGS -->
+  <div class="tab-body" id="tab-protocol">
+    <div class="tab-content">
+      <div class="section-title">Protocols</div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">cXML 1.2</div>
+          <div class="toggle-sub">SAP Ariba, Coupa, Jaggaer</div>
+        </div>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">OCI 4.0</div>
+          <div class="toggle-sub">SAP SRM / SUS</div>
+        </div>
+        <div class="toggle-switch off"></div>
+      </div>
+      <div class="section-title" style="margin-top:14px">cXML Options</div>
+      <div class="field-row">
+        <div class="field">
+          <label>operationAllowed</label>
+          <select><option>edit</option><option>create</option><option>inspect</option></select>
+          <div class="field-hint">Sent back in PunchOutSetupResponse</div>
+        </div>
+        <div class="field">
+          <label>OCI ~OkCode</label>
+          <select><option>ADDFROMCATALOG</option><option>SOURCING</option></select>
+          <div class="field-hint">SAP field mapped on cart return</div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn-primary">Save</button></div>
+    </div>
+  </div>
+
+  <!-- CONNECTION TEST -->
+  <div class="tab-body" id="tab-test">
+    <div class="tab-content">
+      <div class="section-title">cXML Handshake Test</div>
+      <p style="font-size:12px;color:#555;margin-bottom:10px">Sends a simulated PunchOutSetupRequest. Replace <code style="background:#f5f5f5;padding:1px 4px;border-radius:2px;font-size:11px">YOUR_SHARED_SECRET</code> with your configured secret.</p>
+      <div class="code-box">&lt;cXML payloadID="test-001"&gt;
+  &lt;Header&gt;
+    &lt;Sender&gt;
+      &lt;Credential domain="NetworkId"&gt;
+        &lt;Identity&gt;test-buyer-org&lt;/Identity&gt;
+        &lt;SharedSecret&gt;<span style="color:#e44">YOUR_SHARED_SECRET</span>&lt;/SharedSecret&gt;
+      &lt;/Credential&gt;
+    &lt;/Sender&gt;
+  &lt;/Header&gt;
+  &lt;Request&gt;...&lt;/Request&gt;
+&lt;/cXML&gt;</div>
+      <div class="btn-row"><button class="btn-primary">Run Test</button></div>
+      <div class="status-ok">✓ HTTP 200 — PunchOutSetupResponse received</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-body').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+</script>
+
+</body>
+</html>
