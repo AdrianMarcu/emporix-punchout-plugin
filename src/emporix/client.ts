@@ -100,6 +100,7 @@ export class EmporixClient {
         : Array.isArray(raw?.carts) ? raw.carts
         : Array.isArray(raw?.results) ? raw.results
         : Array.isArray(raw?.content) ? raw.content
+        : (raw?.id || raw?.cartId) ? [raw]   // single cart object returned directly
         : [];
       console.log('[listCartIdsByCustomer] parsed cart count:', carts.length);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
