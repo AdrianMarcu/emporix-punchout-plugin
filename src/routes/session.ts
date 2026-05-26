@@ -88,9 +88,12 @@ export function createSessionRouter(tenantId: string): Router {
         tenantId,
         appConfig.outboundTimeoutMs,
       );
+      // Use the anonymous login's session_id as the cart session-id so the
+      // storefront's syncCart(sessionId) finds this cart after loginBasedOnCustomerToken().
+      const cartSessionId = anonTokenData?.session_id ?? session.sessionId;
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
-        session.sessionId,
+        cartSessionId,
         `Bearer ${saToken}`,
         anonTokenData?.saas_token,
       );

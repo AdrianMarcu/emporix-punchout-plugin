@@ -48,17 +48,20 @@ export interface AnonymousTokenResponse {
   access_token: string;
   saas_token: string;
   expires_in: number;
-  session_id?: string;
+  session_id: string;
 }
 
 /**
- * Anonymous customer token — the Emporix b2b-showcase storefront reads
- * ?customerToken=&saasToken=&customerTokenExpiresIn= from the URL and calls
- * loginBasedOnCustomerToken(), which lets it find the cart associated with
- * that anonymous customer's saas-token.
+ * Anonymous customer login via the b2b-showcase endpoint.
+ * Returns access_token, saas_token, session_id, expires_in.
  *
- * The same saas-token must be passed as the `saas-token` header when
- * creating the cart server-side so the cart is associated with this customer.
+ * The storefront reads ?customerToken=&saasToken=&customerTokenExpiresIn= and
+ * calls loginBasedOnCustomerToken(), which restores the anonymous session.
+ * The cart must be created with session-id=<session_id> so the storefront's
+ * syncCart(sessionId) can find it after login.
+ *
+ * Endpoint: POST /customerlogin/auth/anonymous/login  (NOT /token — that
+ * returns a plain-string opaque token used only for password-reset operations)
  */
 export async function getAnonymousTokenFull(
   apiBase: string,
@@ -73,7 +76,7 @@ export async function getAnonymousTokenFull(
   let res: { data: AnonymousTokenResponse };
   try {
     res = await axios.post<AnonymousTokenResponse>(
-      `${apiBase}/customerlogin/auth/anonymous/token`,
+      `${apiBase}/customerlogin/auth/anonymous/login`,
       params.toString(),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
     );
@@ -82,8 +85,8 @@ export async function getAnonymousTokenFull(
     const detail = (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const status = (err as any)?.response?.status;
-    throw new Error(`Failed to get anonymous token (HTTP ${status}): ${JSON.stringify(detail)}`, { cause: err });
+    throw new Error(`Failed to get anonymous login (HTTP ${status}): ${JSON.stringify(detail)}`, { cause: err });
   }
-  console.log('[getAnonymousTokenFull] response keys:', Object.keys(res.data).join(', '));
+  console.log('[getAnonymousTokenFull] keys:', Object.keys(res.data).join(', '), '| session_id:', res.data.session_id, '| saas_token present:', !!res.data.saas_token);
   return res.data;
 }
