@@ -42,18 +42,43 @@ function seedFromEnv(): Partial<PluginConfig> {
   };
 }
 
+/** Strip accidental URL prefix from a storefrontClientId value. */
+function sanitizeClientId(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  // If value contains a URL prefix (pasted from address bar), extract the token after the last slash or dot
+  if (id.startsWith('http://') || id.startsWith('https://')) {
+    // Pull the last contiguous alphanumeric segment (the real client ID)
+    const match = id.match(/([A-Za-z0-9]{20,})$/);
+    return match ? match[1] : undefined;
+  }
+  return id;
+}
+
 export async function getConfig(tenantId: string, _accessToken?: string): Promise<PluginConfig | null> {
+  let cfg: PluginConfig | null = null;
   try {
     const raw = await redis.get(`${CONFIG_PREFIX}${tenantId}`);
     if (raw) {
-      return { ...DEFAULTS, ...JSON.parse(raw) as Partial<PluginConfig> };
+      cfg = { ...DEFAULTS, ...JSON.parse(raw) as Partial<PluginConfig> };
     }
   } catch {
     // Redis unavailable — fall through to env seed
   }
-  const seed = seedFromEnv();
-  if (!seed.serviceAccount?.clientId) return null;
-  return { ...DEFAULTS, ...seed };
+
+  if (!cfg) {
+    const seed = seedFromEnv();
+    if (!seed.serviceAccount?.clientId) return null;
+    cfg = { ...DEFAULTS, ...seed };
+  }
+
+  // env var always overrides Redis — prevents stale/corrupt values from blocking deploys
+  if (process.env.STOREFRONT_CLIENT_ID) {
+    cfg.storefrontClientId = process.env.STOREFRONT_CLIENT_ID;
+  } else {
+    cfg.storefrontClientId = sanitizeClientId(cfg.storefrontClientId);
+  }
+
+  return cfg;
 }
 
 export async function saveConfig(
