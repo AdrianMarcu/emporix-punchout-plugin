@@ -1,6 +1,5 @@
 import { encrypt, decrypt, hashSecret } from '../crypto';
 import { config as appConfig } from '../config';
-import redis from '../redis';
 
 export interface PluginConfig {
   sharedSecretHash: string;
@@ -13,26 +12,29 @@ export interface PluginConfig {
   buyerMappings: Array<{ buyerOrgId: string; customerGroupId: string }>;
 }
 
-const CONFIG_PREFIX = 'punchout:config:';
+// In-memory store keyed by tenantId — sufficient for demo/PoC.
+// Config survives the process lifetime; persists across requests within a session.
+const store = new Map<string, PluginConfig>();
 
-function redisKey(tenantId: string): string {
-  return `${CONFIG_PREFIX}${tenantId}`;
+// Optionally seed from environment variables so config survives redeployments
+function seedFromEnv(tenantId: string): PluginConfig | null {
+  const clientId = process.env.EMPORIX_CLIENT_ID;
+  const storefrontBaseUrl = process.env.STOREFRONT_BASE_URL;
+  if (!clientId && !storefrontBaseUrl) return null;
+  return {
+    sharedSecretHash: '',
+    serviceAccount: { clientId: clientId ?? '', clientSecret: '' },
+    storefrontBaseUrl: storefrontBaseUrl ?? '',
+    cxmlEnabled: true,
+    ociEnabled: false,
+    operationAllowed: 'edit',
+    ociOkCode: 'ADDFROMCATALOG',
+    buyerMappings: [],
+  };
 }
 
 export async function getConfig(tenantId: string, _accessToken?: string): Promise<PluginConfig | null> {
-  const raw = await redis.get(redisKey(tenantId));
-  if (!raw) return null;
-  const cfg = JSON.parse(raw) as PluginConfig;
-  // Decrypt client secret stored at rest
-  if (cfg.serviceAccount.clientSecret) {
-    try {
-      cfg.serviceAccount.clientSecret = decrypt(cfg.serviceAccount.clientSecret, appConfig.crypto.aesKey);
-    } catch {
-      // If decryption fails (e.g. key rotation), return empty secret
-      cfg.serviceAccount.clientSecret = '';
-    }
-  }
-  return cfg;
+  return store.get(tenantId) ?? seedFromEnv(tenantId);
 }
 
 export async function saveConfig(
@@ -40,7 +42,7 @@ export async function saveConfig(
   incoming: Omit<PluginConfig, 'sharedSecretHash'> & { sharedSecret?: string },
   _accessToken?: string,
 ): Promise<void> {
-  const existing = await getConfig(tenantId);
+  const existing = store.get(tenantId) ?? seedFromEnv(tenantId);
 
   const { sharedSecret, ...configFields } = incoming;
 
@@ -49,21 +51,18 @@ export async function saveConfig(
     : (existing?.sharedSecretHash ?? '');
 
   const rawClientSecret = incoming.serviceAccount.clientSecret;
-  const clientSecretToEncrypt = (rawClientSecret === '***' && existing)
-    ? existing.serviceAccount.clientSecret  // already decrypted by getConfig
+  const clientSecretToStore = (rawClientSecret === '***' && existing)
+    ? existing.serviceAccount.clientSecret
     : rawClientSecret;
-  const encryptedClientSecret = clientSecretToEncrypt
-    ? encrypt(clientSecretToEncrypt, appConfig.crypto.aesKey)
-    : '';
 
   const toSave: PluginConfig = {
     ...configFields,
     sharedSecretHash,
     serviceAccount: {
       clientId: incoming.serviceAccount.clientId,
-      clientSecret: encryptedClientSecret,
+      clientSecret: clientSecretToStore,
     },
   };
 
-  await redis.set(redisKey(tenantId), JSON.stringify(toSave));
+  store.set(tenantId, toSave);
 }

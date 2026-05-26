@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { Buffer } from 'buffer';
 import helmet from 'helmet';
 import cors from 'cors';
 import { config } from './config';
@@ -9,10 +8,6 @@ import { createSessionRouter } from './routes/session';
 import { createAdminRouter } from './admin/router';
 import { punchoutRateLimiter } from './middleware/rateLimiter';
 import { createWidgetRouter } from './routes/widget';
-
-if (process.env.NODE_ENV !== 'test' && Buffer.byteLength(config.crypto.aesKey, 'utf8') !== 32) {
-  throw new Error('AES_KEY must be exactly 32 bytes. Set it in your environment.');
-}
 
 const DASHBOARD_ORIGIN = 'https://admin.emporix.io';
 const adminCors = cors({ origin: DASHBOARD_ORIGIN, credentials: true });
