@@ -113,11 +113,21 @@ export function createSessionRouter(tenantId: string): Router {
         secure: process.env.NODE_ENV === 'production',
       });
 
-      // Redirect to storefront — do NOT pass customerToken/saasToken/customerTokenExpiresIn.
-      // Those params trigger loginBasedOnCustomerToken() which calls /customer/me with an
-      // anonymous token and crashes (401). The storefront creates its own anonymous session
-      // and cart; our pre-created cartId is passed as a reference only.
+      // Pass all three token params so the storefront's auth-provider calls
+      // loginBasedOnCustomerToken() → which calls syncAuth() a second time →
+      // which finally runs setSessionId(getSessionId()) with the real sessionId
+      // that AccessToken() stored in localStorage on the first syncAuth pass.
+      // Without this second syncAuth(), sessionId stays null in React state and
+      // cartAccount.id is always undefined ("Cart with code undefined not found").
+      //
+      // saasToken must be truthy for insertLocalStorageValue to store it; if the
+      // anonymous login doesn't return one, fall back to the access_token itself.
       const params = new URLSearchParams({ cartId });
+      if (anonTokenData) {
+        params.set('customerToken', anonTokenData.access_token);
+        params.set('saasToken', anonTokenData.saas_token || anonTokenData.access_token);
+        params.set('customerTokenExpiresIn', String(anonTokenData.expires_in));
+      }
       const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
       console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
       res.redirect(redirectUrl);
