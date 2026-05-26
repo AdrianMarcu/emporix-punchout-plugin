@@ -74,10 +74,13 @@ export function createSessionRouter(tenantId: string): Router {
       let anonTokenData: AnonymousTokenResponse | null = null;
       try {
         // GET /customerlogin/auth/anonymous/login?client_id=...&hybris-tenant=...
-        // (matches how b2b-showcase accessToken.js calls this endpoint)
+        // Must use the storefront app's client_id (REACT_APP_CLIENT_ID), not the
+        // plugin service account — the anonymous login endpoint only accepts
+        // storefront-registered public clients.
+        const storefrontClientId = cfg.storefrontClientId ?? appConfig.emporix.clientId;
         anonTokenData = await getAnonymousTokenFull(
           appConfig.emporix.apiBase,
-          appConfig.emporix.clientId,
+          storefrontClientId,
           tenantId,
         );
         console.log('[session] anonymous token obtained, saas_token present:', !!anonTokenData.saas_token, '| sessionId:', anonTokenData.sessionId);

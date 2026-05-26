@@ -515,7 +515,7 @@ const twoCol = {
 };
 
 function Credentials() {
-  const [form, setForm] = reactExports.useState({ sharedSecret: "", clientId: "", clientSecret: "", storefrontBaseUrl: "" });
+  const [form, setForm] = reactExports.useState({ sharedSecret: "", clientId: "", clientSecret: "", storefrontBaseUrl: "", storefrontClientId: "" });
   const [status, setStatus] = reactExports.useState("");
   reactExports.useEffect(() => {
     api.getConfig().then((cfg) => {
@@ -524,7 +524,8 @@ function Credentials() {
         sharedSecret: "",
         clientId: String(c.serviceAccount?.clientId ?? ""),
         clientSecret: "",
-        storefrontBaseUrl: String(c.storefrontBaseUrl ?? "")
+        storefrontBaseUrl: String(c.storefrontBaseUrl ?? ""),
+        storefrontClientId: String(c.storefrontClientId ?? "")
       });
     }).catch(() => {
     });
@@ -536,7 +537,8 @@ function Credentials() {
       await api.saveConfig({
         sharedSecret: form.sharedSecret || void 0,
         serviceAccount: { clientId: form.clientId, clientSecret: form.clientSecret },
-        storefrontBaseUrl: form.storefrontBaseUrl
+        storefrontBaseUrl: form.storefrontBaseUrl,
+        storefrontClientId: form.storefrontClientId || void 0
       });
       setStatus("Saved.");
     } catch {
@@ -571,6 +573,22 @@ function Credentials() {
             value: form.storefrontBaseUrl,
             onChange: (e) => setForm({ ...form, storefrontBaseUrl: e.target.value }),
             placeholder: "https://your-store.com",
+            style: input
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "block" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: fieldLabel, children: [
+          "Storefront Client ID ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: fieldHint, children: "— REACT_APP_CLIENT_ID of the b2b-showcase" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "text",
+            value: form.storefrontClientId,
+            onChange: (e) => setForm({ ...form, storefrontClientId: e.target.value }),
+            placeholder: "storefront app client_id…",
             style: input
           }
         )

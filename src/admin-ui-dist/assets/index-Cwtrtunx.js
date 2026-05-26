@@ -1,4 +1,4 @@
-import { c as client, j as jsxRuntimeExports, A as App, s as setToken } from './App-DjT8gTyb.js';
+import { c as client, j as jsxRuntimeExports, A as App, s as setToken } from './App-Ucp9AIh-.js';
 
 const hash = window.location.hash.slice(1);
 const params = new URLSearchParams(hash);

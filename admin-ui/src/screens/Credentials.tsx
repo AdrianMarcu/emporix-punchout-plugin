@@ -7,10 +7,11 @@ interface CredentialsForm {
   clientId: string;
   clientSecret: string;
   storefrontBaseUrl: string;
+  storefrontClientId: string;
 }
 
 export default function Credentials() {
-  const [form, setForm] = useState<CredentialsForm>({ sharedSecret: '', clientId: '', clientSecret: '', storefrontBaseUrl: '' });
+  const [form, setForm] = useState<CredentialsForm>({ sharedSecret: '', clientId: '', clientSecret: '', storefrontBaseUrl: '', storefrontClientId: '' });
   const [status, setStatus] = useState('');
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function Credentials() {
         clientId: String((c.serviceAccount as Record<string, string>)?.clientId ?? ''),
         clientSecret: '',
         storefrontBaseUrl: String(c.storefrontBaseUrl ?? ''),
+        storefrontClientId: String(c.storefrontClientId ?? ''),
       });
     }).catch(() => {});
   }, []);
@@ -33,6 +35,7 @@ export default function Credentials() {
         sharedSecret: form.sharedSecret || undefined,
         serviceAccount: { clientId: form.clientId, clientSecret: form.clientSecret },
         storefrontBaseUrl: form.storefrontBaseUrl,
+        storefrontClientId: form.storefrontClientId || undefined,
       });
       setStatus('Saved.');
     } catch {
@@ -63,6 +66,18 @@ export default function Credentials() {
             value={form.storefrontBaseUrl}
             onChange={e => setForm({ ...form, storefrontBaseUrl: e.target.value })}
             placeholder="https://your-store.com"
+            style={input}
+          />
+        </label>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>
+            Storefront Client ID <span style={fieldHint}>— REACT_APP_CLIENT_ID of the b2b-showcase</span>
+          </span>
+          <input
+            type="text"
+            value={form.storefrontClientId}
+            onChange={e => setForm({ ...form, storefrontClientId: e.target.value })}
+            placeholder="storefront app client_id…"
             style={input}
           />
         </label>

@@ -5,6 +5,10 @@ export interface PluginConfig {
   sharedSecretHash: string;
   serviceAccount: { clientId: string; clientSecret: string };
   storefrontBaseUrl: string;
+  /** Client ID of the storefront app (REACT_APP_CLIENT_ID in b2b-showcase).
+   *  Used to obtain an anonymous customer token so the storefront can adopt
+   *  the pre-created cart via loginBasedOnCustomerToken(). */
+  storefrontClientId?: string;
   cxmlEnabled: boolean;
   ociEnabled: boolean;
   operationAllowed: 'create' | 'edit' | 'inspect';

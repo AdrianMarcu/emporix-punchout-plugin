@@ -1,4 +1,4 @@
-import { s as setToken, r as reactExports, a as createRoot, A as App } from './App-DjT8gTyb.js';
+import { s as setToken, r as reactExports, a as createRoot, A as App } from './App-Ucp9AIh-.js';
 
 const roots = /* @__PURE__ */ new WeakMap();
 function RemoteComponent({

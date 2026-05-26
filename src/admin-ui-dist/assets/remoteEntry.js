@@ -3,7 +3,7 @@ const currentImports = {};
       let moduleMap = {
 "./RemoteComponent":()=>{
       dynamicLoadingCss(["style-CaCRQVk6.css"], false, './RemoteComponent');
-      return __federation_import('./__federation_expose_RemoteComponent-DUtaTkVd.js').then(module =>() => module)},};
+      return __federation_import('./__federation_expose_RemoteComponent-BCwSuuj_.js').then(module =>() => module)},};
       const seen = {};
       const dynamicLoadingCss = (cssFilePaths, dontAppendStylesToHead, exposeItemName) => {
         const metaUrl = import.meta.url;
