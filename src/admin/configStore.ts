@@ -56,7 +56,20 @@ export async function saveConfig(
     ? existing.serviceAccount.clientSecret
     : rawClientSecret;
 
+  const defaults: PluginConfig = {
+    sharedSecretHash: '',
+    serviceAccount: { clientId: '', clientSecret: '' },
+    storefrontBaseUrl: '',
+    cxmlEnabled: true,
+    ociEnabled: false,
+    operationAllowed: 'edit',
+    ociOkCode: 'ADDFROMCATALOG',
+    buyerMappings: [],
+  };
+
   const toSave: PluginConfig = {
+    ...defaults,
+    ...(existing ?? {}),
     ...configFields,
     sharedSecretHash,
     serviceAccount: {
