@@ -14,12 +14,23 @@ export class EmporixClient {
 
   async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
     const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
-    const body: Record<string, unknown> = { sessionId, currency: 'USD' };
+    // Emporix (SAP/Hybris lineage) identifies anonymous customers via the
+    // X-Anonymous-Customer-Unique-Id header when using a service-account token.
+    // The sessionId body field is accepted by some versions but the header is
+    // the canonical approach and works across all Emporix API versions.
+    const body: Record<string, unknown> = { currency: 'USD' };
     if (customerGroupId) body.customerGroup = customerGroupId;
     try {
       const res = await axios.post<{ cartId: string }>(
         url, body,
-        { ...this.axiosOpts, headers: { Authorization: accessToken } },
+        {
+          ...this.axiosOpts,
+          headers: {
+            Authorization: accessToken,
+            'X-Anonymous-Customer-Unique-Id': sessionId,
+            'Content-Type': 'application/json',
+          },
+        },
       );
       return res.data.cartId;
     } catch (err) {

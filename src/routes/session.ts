@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { SessionStore } from '../session/store';
 import { EmporixClient } from '../emporix/client';
-import { TokenCache, getAnonymousToken } from '../emporix/auth';
+import { TokenCache } from '../emporix/auth';
 import { getConfig } from '../admin/configStore';
 import type { PluginConfig } from '../admin/configStore';
 import { config as appConfig } from '../config';
@@ -18,6 +18,9 @@ export function createSessionRouter(tenantId: string): Router {
     appConfig.emporix.clientId,
     appConfig.emporix.clientSecret,
   );
+
+  let serviceAccountCache: TokenCache | null = null;
+  let serviceAccountClientId: string | null = null;
 
   router.get('/:token', async (req: Request, res: Response) => {
     const { token } = req.params;
@@ -48,25 +51,28 @@ export function createSessionRouter(tenantId: string): Router {
     }
 
     try {
-      // Anonymous customer token uses the app-level (bootstrap) credentials, not
-      // the service account. The service account is for admin APIs only; the
-      // customerlogin endpoint needs the storefront/app client to issue a
-      // customer-scoped token the cart API will accept.
-      const anonToken = await getAnonymousToken(
-        appConfig.emporix.apiBase,
-        tenantId,
-        appConfig.emporix.clientId,
-        appConfig.emporix.clientSecret,
-      );
+      if (!serviceAccountCache || serviceAccountClientId !== cfg.serviceAccount.clientId) {
+        serviceAccountCache = new TokenCache(
+          appConfig.emporix.apiBase,
+          tenantId,
+          cfg.serviceAccount.clientId,
+          cfg.serviceAccount.clientSecret,
+        );
+        serviceAccountClientId = cfg.serviceAccount.clientId;
+      }
+      const saToken = await serviceAccountCache.getToken();
       const emporixClient = new EmporixClient(
         appConfig.emporix.apiBase,
         tenantId,
         appConfig.outboundTimeoutMs,
       );
+      // Anonymous customer context is passed via X-Anonymous-Customer-Unique-Id header
+      // (SAP/Hybris/Emporix convention) — the service account Bearer token handles auth,
+      // the header tells the cart API which anonymous session this cart belongs to.
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
         session.sessionId,
-        `Bearer ${anonToken}`,
+        `Bearer ${saToken}`,
       );
       await store.updateCartId(sessionId, cartId);
       res.cookie('punchout_session', sessionId, {
