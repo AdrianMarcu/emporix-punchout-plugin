@@ -78,6 +78,7 @@ export function createSessionRouter(tenantId: string): Router {
         // plugin service account — the anonymous login endpoint only accepts
         // storefront-registered public clients.
         const storefrontClientId = cfg.storefrontClientId ?? appConfig.emporix.clientId;
+        console.log('[session] anon token — using client_id:', storefrontClientId, '| source:', cfg.storefrontClientId ? 'config' : 'env-fallback');
         anonTokenData = await getAnonymousTokenFull(
           appConfig.emporix.apiBase,
           storefrontClientId,
