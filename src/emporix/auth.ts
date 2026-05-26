@@ -46,11 +46,13 @@ export class TokenCache {
 
 /**
  * Anonymous customer token — required for cart creation.
- * Emporix embeds the customer/session identity in this token; passing it to
- * POST /cart/{tenant}/carts satisfies the session-id/customerId requirement.
+ * Uses the tenant-scoped customerlogin endpoint with the app-level credentials.
+ * The token encodes an anonymous session so the cart API doesn't require an
+ * explicit session-id or customerId in the request body.
  */
 export async function getAnonymousToken(
   apiBase: string,
+  tenantId: string,
   clientId: string,
   clientSecret: string,
 ): Promise<string> {
@@ -59,10 +61,19 @@ export async function getAnonymousToken(
     client_id: clientId,
     client_secret: clientSecret,
   });
-  const res = await axios.post<{ access_token: string }>(
-    `${apiBase}/customerlogin/auth/anonymous/token`,
-    params.toString(),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
-  );
+  let res: { data: { access_token: string } };
+  try {
+    res = await axios.post<{ access_token: string }>(
+      `${apiBase}/customerlogin/${tenantId}/auth/anonymous/token`,
+      params.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
+    );
+  } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const detail = (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = (err as any)?.response?.status;
+    throw new Error(`Failed to get anonymous token (HTTP ${status}): ${JSON.stringify(detail)}`, { cause: err });
+  }
   return res.data.access_token;
 }

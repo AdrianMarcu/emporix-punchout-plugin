@@ -48,10 +48,15 @@ export function createSessionRouter(tenantId: string): Router {
     }
 
     try {
+      // Anonymous customer token uses the app-level (bootstrap) credentials, not
+      // the service account. The service account is for admin APIs only; the
+      // customerlogin endpoint needs the storefront/app client to issue a
+      // customer-scoped token the cart API will accept.
       const anonToken = await getAnonymousToken(
         appConfig.emporix.apiBase,
-        cfg.serviceAccount.clientId,
-        cfg.serviceAccount.clientSecret,
+        tenantId,
+        appConfig.emporix.clientId,
+        appConfig.emporix.clientSecret,
       );
       const emporixClient = new EmporixClient(
         appConfig.emporix.apiBase,
