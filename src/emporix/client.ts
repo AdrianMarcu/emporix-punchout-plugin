@@ -38,14 +38,14 @@ export class EmporixClient {
   }
 
   async getCustomerGroups(accessToken: string): Promise<CustomerGroup[]> {
+    const url = `${this.apiBase}/customer-group/${this.tenantId}/customergroups`;
     try {
-      const res = await axios.get<CustomerGroup[]>(
-        `${this.apiBase}/customer-group/${this.tenantId}/customergroups`,
-        { ...this.axiosOpts, headers: { Authorization: accessToken } },
-      );
+      const res = await axios.get<CustomerGroup[]>(url, {
+        ...this.axiosOpts, headers: { Authorization: accessToken },
+      });
       return res.data;
     } catch (err) {
-      throw new Error('Failed to fetch customer groups', { cause: err });
+      throw new Error(`Failed to fetch customer groups from ${url}`, { cause: err });
     }
   }
 }
