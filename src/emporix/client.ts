@@ -12,25 +12,27 @@ export class EmporixClient {
     return { timeout: this.timeoutMs };
   }
 
-  async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
+  async createGuestCart(
+    customerGroupId: string,
+    sessionId: string,
+    accessToken: string,
+    saasToken?: string,
+  ): Promise<string> {
     const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
-    // Emporix cart API contract (confirmed from docs):
-    //   - session-id goes in a REQUEST HEADER, not the body
-    //   - saas-token header can be omitted for guest/anonymous carts
-    //   - body uses siteCode + currency, not sessionId/customerId
     const body: Record<string, unknown> = { currency: 'USD', siteCode: 'main' };
     if (customerGroupId) body.customerGroup = customerGroupId;
+    // saas-token associates the cart with the anonymous customer so the
+    // storefront can find it via loginBasedOnCustomerToken()
+    const headers: Record<string, string> = {
+      Authorization: accessToken,
+      'session-id': sessionId,
+      'Content-Type': 'application/json',
+    };
+    if (saasToken) headers['saas-token'] = saasToken;
     try {
       const res = await axios.post<{ cartId: string }>(
         url, body,
-        {
-          ...this.axiosOpts,
-          headers: {
-            Authorization: accessToken,
-            'session-id': sessionId,
-            'Content-Type': 'application/json',
-          },
-        },
+        { ...this.axiosOpts, headers },
       );
       // Emporix cart creation returns { cartId, yrn } on HTTP 201
       const cartId = res.data.cartId;

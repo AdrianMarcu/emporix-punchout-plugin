@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { SessionStore } from '../session/store';
 import { EmporixClient } from '../emporix/client';
-import { TokenCache } from '../emporix/auth';
+import { TokenCache, getAnonymousTokenFull } from '../emporix/auth';
 import { getConfig } from '../admin/configStore';
 import type { PluginConfig } from '../admin/configStore';
 import { config as appConfig } from '../config';
@@ -67,6 +67,22 @@ export function createSessionRouter(tenantId: string): Router {
         serviceAccountClientId = cfg.serviceAccount.clientId;
       }
       const saToken = await serviceAccountCache.getToken();
+
+      // Get anonymous customer token so the storefront can adopt the cart.
+      // The b2b-showcase reads ?customerToken=&saasToken=&customerTokenExpiresIn=
+      // and calls loginBasedOnCustomerToken() — it then finds carts by saas-token.
+      let anonTokenData: { access_token: string; saas_token: string; expires_in: number } | null = null;
+      try {
+        anonTokenData = await getAnonymousTokenFull(
+          appConfig.emporix.apiBase,
+          appConfig.emporix.clientId,
+          appConfig.emporix.clientSecret,
+        );
+        console.log('[session] anonymous token obtained, saas_token present:', !!anonTokenData.saas_token);
+      } catch (anonErr) {
+        console.warn('[session] could not get anonymous token:', anonErr instanceof Error ? anonErr.message : String(anonErr));
+      }
+
       const emporixClient = new EmporixClient(
         appConfig.emporix.apiBase,
         tenantId,
@@ -76,6 +92,7 @@ export function createSessionRouter(tenantId: string): Router {
         session.customerGroupId,
         session.sessionId,
         `Bearer ${saToken}`,
+        anonTokenData?.saas_token,
       );
       console.log('[session] cart created — cartId:', cartId);
 
@@ -87,8 +104,16 @@ export function createSessionRouter(tenantId: string): Router {
         secure: process.env.NODE_ENV === 'production',
       });
 
-      const redirectUrl = `${cfg.storefrontBaseUrl}?cartId=${cartId}`;
-      console.log('[session] redirecting to:', redirectUrl);
+      // Build redirect URL — include anonymous customer credentials so the
+      // storefront can call loginBasedOnCustomerToken() and find the cart.
+      const params = new URLSearchParams({ cartId });
+      if (anonTokenData) {
+        params.set('customerToken', anonTokenData.access_token);
+        params.set('saasToken', anonTokenData.saas_token ?? '');
+        params.set('customerTokenExpiresIn', String(anonTokenData.expires_in));
+      }
+      const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
+      console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
       res.redirect(redirectUrl);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

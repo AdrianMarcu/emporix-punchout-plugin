@@ -44,27 +44,36 @@ export class TokenCache {
   }
 }
 
+export interface AnonymousTokenResponse {
+  access_token: string;
+  saas_token: string;
+  expires_in: number;
+  session_id?: string;
+}
+
 /**
- * Anonymous customer token — required for cart creation.
- * Uses the tenant-scoped customerlogin endpoint with the app-level credentials.
- * The token encodes an anonymous session so the cart API doesn't require an
- * explicit session-id or customerId in the request body.
+ * Anonymous customer token — the Emporix b2b-showcase storefront reads
+ * ?customerToken=&saasToken=&customerTokenExpiresIn= from the URL and calls
+ * loginBasedOnCustomerToken(), which lets it find the cart associated with
+ * that anonymous customer's saas-token.
+ *
+ * The same saas-token must be passed as the `saas-token` header when
+ * creating the cart server-side so the cart is associated with this customer.
  */
-export async function getAnonymousToken(
+export async function getAnonymousTokenFull(
   apiBase: string,
-  tenantId: string,
   clientId: string,
   clientSecret: string,
-): Promise<string> {
+): Promise<AnonymousTokenResponse> {
   const params = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: clientId,
     client_secret: clientSecret,
   });
-  let res: { data: { access_token: string } };
+  let res: { data: AnonymousTokenResponse };
   try {
-    res = await axios.post<{ access_token: string }>(
-      `${apiBase}/customerlogin/${tenantId}/auth/anonymous/token`,
+    res = await axios.post<AnonymousTokenResponse>(
+      `${apiBase}/customerlogin/auth/anonymous/token`,
       params.toString(),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
     );
@@ -75,5 +84,6 @@ export async function getAnonymousToken(
     const status = (err as any)?.response?.status;
     throw new Error(`Failed to get anonymous token (HTTP ${status}): ${JSON.stringify(detail)}`, { cause: err });
   }
-  return res.data.access_token;
+  console.log('[getAnonymousTokenFull] response keys:', Object.keys(res.data).join(', '));
+  return res.data;
 }
