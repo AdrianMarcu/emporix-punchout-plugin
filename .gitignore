@@ -48,7 +48,7 @@ jspm_packages/
 
 # Build outputs
 dist/
-src/admin-ui-dist/
+# src/admin-ui-dist/ is built by Railway via the build script — do not ignore
 
 # Vite files
 vite.config.js.timestamp-*
