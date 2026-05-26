@@ -133,16 +133,30 @@ export function createSessionRouter(tenantId: string): Router {
 
           // The punchout customer is a shared account — delete any leftover carts from
           // previous sessions before creating a new one (avoids 409 duplicate-key error).
-          const existingCartIds = await emporixClient.listCartIds(cartBearerToken);
-          if (existingCartIds.length > 0) {
-            console.log(`[session] clearing ${existingCartIds.length} existing cart(s) for punchout customer`);
-            await Promise.all(
-              existingCartIds.map(id =>
-                emporixClient.deleteCart(id, `Bearer ${saToken}`).catch(delErr =>
-                  console.warn(`[session] could not delete cart ${id}:`, delErr instanceof Error ? delErr.message : String(delErr)),
-                ),
-              ),
+          // Use GET /customer/{tenant}/me to get the customerNumber, then query carts
+          // via the service account (which has visibility of all customers' carts).
+          try {
+            const me = await emporixClient.getCustomerMe(cartBearerToken);
+            const customerNumber = me.customerNumber;
+            console.log('[session] punchout customer number:', customerNumber);
+            const existingCartIds = await emporixClient.listCartIdsByCustomer(
+              customerNumber,
+              `Bearer ${saToken}`,
             );
+            if (existingCartIds.length > 0) {
+              console.log(`[session] clearing ${existingCartIds.length} existing cart(s) for customer ${customerNumber}`);
+              await Promise.all(
+                existingCartIds.map(id =>
+                  emporixClient.deleteCart(id, `Bearer ${saToken}`).catch(delErr =>
+                    console.warn(`[session] could not delete cart ${id}:`, delErr instanceof Error ? delErr.message : String(delErr)),
+                  ),
+                ),
+              );
+            } else {
+              console.log('[session] no existing carts found for punchout customer');
+            }
+          } catch (cleanupErr) {
+            console.warn('[session] cart cleanup error (will still attempt cart creation):', cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr));
           }
         } catch (loginErr) {
           console.warn('[session] punchout customer login failed:', loginErr instanceof Error ? loginErr.message : String(loginErr));

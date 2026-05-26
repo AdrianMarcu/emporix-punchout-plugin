@@ -64,26 +64,49 @@ export class EmporixClient {
   }
 
   /**
-   * Return all cart IDs visible to the given bearer token.
-   * Handles both array and paginated `{ data: [...] }` response shapes.
-   * Never throws — returns [] on error so the caller can proceed.
+   * Fetch the customer's profile to obtain their customerNumber.
+   * Uses the customer's own JWT (Bearer token).
    */
-  async listCartIds(bearerToken: string): Promise<string[]> {
+  async getCustomerMe(customerBearer: string): Promise<{ customerNumber: string; [key: string]: unknown }> {
+    const res = await axios.get<{ customerNumber: string; [key: string]: unknown }>(
+      `${this.apiBase}/customer/${this.tenantId}/me`,
+      { ...this.axiosOpts, headers: { Authorization: customerBearer } },
+    );
+    return res.data;
+  }
+
+  /**
+   * List cart IDs for a specific customer using the service account token.
+   * Uses ?customerId= query param so the service account can see any customer's carts.
+   * Never throws — returns [] on error.
+   */
+  async listCartIdsByCustomer(customerId: string, serviceAccountBearer: string): Promise<string[]> {
     try {
       const res = await axios.get(
         `${this.apiBase}/cart/${this.tenantId}/carts`,
-        { ...this.axiosOpts, headers: { Authorization: bearerToken } },
+        {
+          ...this.axiosOpts,
+          headers: { Authorization: serviceAccountBearer },
+          params: { customerId },
+        },
       );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const carts: any[] = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+      const raw = res.data as any;
+      const carts: unknown[] = Array.isArray(raw) ? raw
+        : Array.isArray(raw?.data) ? raw.data
+        : Array.isArray(raw?.items) ? raw.items
+        : [];
+      console.log('[listCartIdsByCustomer] raw response type:', Array.isArray(raw) ? 'array' : typeof raw, '| count:', carts.length);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return carts.map((c: any) => c.id || c.cartId).filter(Boolean);
-    } catch {
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.warn('[listCartIdsByCustomer] failed:', (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err)));
       return [];
     }
   }
 
-  /** Delete a cart by ID. Uses the provided bearer token (service account recommended). */
+  /** Delete a cart by ID (service account token recommended). Ignores 404. */
   async deleteCart(cartId: string, bearerToken: string): Promise<void> {
     try {
       await axios.delete(
@@ -93,7 +116,7 @@ export class EmporixClient {
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const status = (err as any)?.response?.status;
-      if (status !== 404) throw err; // 404 = already gone, ignore
+      if (status !== 404) throw err;
     }
   }
 
