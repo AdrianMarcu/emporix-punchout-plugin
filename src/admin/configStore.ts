@@ -70,7 +70,8 @@ export async function saveConfig(
     : (existing?.sharedSecretHash ?? '');
 
   const rawClientSecret = incoming.serviceAccount.clientSecret;
-  const clientSecretToStore = (rawClientSecret === '***' && existing)
+  // Treat '***' (masked display value) OR empty string as "keep existing secret"
+  const clientSecretToStore = ((!rawClientSecret || rawClientSecret === '***') && existing)
     ? existing.serviceAccount.clientSecret
     : rawClientSecret;
 
