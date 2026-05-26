@@ -1,26 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
-import { sectionTitle, fieldLabel, input, selectStyle, btnPrimary } from '../styles';
+import { sectionTitle, fieldLabel, input, btnPrimary } from '../styles';
 
 interface Mapping { buyerOrgId: string; customerGroupId: string; }
-interface CustomerGroup { id: string; name: string; }
 
 export default function BuyerMappings() {
   const [mappings, setMappings] = useState<Mapping[]>([]);
-  const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [newBuyerOrgId, setNewBuyerOrgId] = useState('');
   const [newGroupId, setNewGroupId] = useState('');
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    Promise.all([api.getBuyers(), api.getCustomerGroups()]).then(([b, g]) => {
-      setMappings(b as Mapping[]);
-      setGroups(g as CustomerGroup[]);
-    }).catch(() => {});
+    api.getBuyers().then(b => setMappings(b as Mapping[])).catch(() => {});
   }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newBuyerOrgId || !newGroupId) return;
     setStatus('Saving…');
     try {
       const updated = await api.saveBuyer({ buyerOrgId: newBuyerOrgId, customerGroupId: newGroupId });
@@ -31,8 +27,6 @@ export default function BuyerMappings() {
     } catch { setStatus('Error saving.'); }
   };
 
-  const groupName = (id: string) => groups.find(g => g.id === id)?.name ?? id;
-
   return (
     <div>
       <div style={sectionTitle}>Buyer → Customer Group Mappings</div>
@@ -41,7 +35,7 @@ export default function BuyerMappings() {
         <thead>
           <tr>
             <th style={{ fontSize: 11, fontWeight: 600, color: '#888', textAlign: 'left', padding: '5px 8px', borderBottom: '1px solid #e8e8e8' }}>Buyer Org ID</th>
-            <th style={{ fontSize: 11, fontWeight: 600, color: '#888', textAlign: 'left', padding: '5px 8px', borderBottom: '1px solid #e8e8e8' }}>Customer Group</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: '#888', textAlign: 'left', padding: '5px 8px', borderBottom: '1px solid #e8e8e8' }}>Customer Group ID</th>
           </tr>
         </thead>
         <tbody>
@@ -57,7 +51,7 @@ export default function BuyerMappings() {
               <td style={{ padding: '6px 8px', borderBottom: '1px solid #f0f0f0', color: '#333' }}>{m.buyerOrgId}</td>
               <td style={{ padding: '6px 8px', borderBottom: '1px solid #f0f0f0' }}>
                 <span style={{ display: 'inline-block', padding: '1px 7px', background: '#e8f0fe', color: '#0066cc', borderRadius: 10, fontSize: 11 }}>
-                  {groupName(m.customerGroupId)}
+                  {m.customerGroupId}
                 </span>
               </td>
             </tr>
@@ -65,23 +59,24 @@ export default function BuyerMappings() {
         </tbody>
       </table>
 
-      {/* Inline add-row */}
       <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
         <label style={{ display: 'block', flex: '0 0 200px' }}>
           <span style={fieldLabel}>Buyer Org ID</span>
           <input
             value={newBuyerOrgId}
             onChange={e => setNewBuyerOrgId(e.target.value)}
-            placeholder="org-identifier"
+            placeholder="demo-buyer-org"
             style={input}
           />
         </label>
         <label style={{ display: 'block', flex: '0 0 200px' }}>
-          <span style={fieldLabel}>Customer Group</span>
-          <select value={newGroupId} onChange={e => setNewGroupId(e.target.value)} style={selectStyle}>
-            <option value="">Select…</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+          <span style={fieldLabel}>Customer Group ID <span style={{ color: '#aaa', fontWeight: 400 }}>— paste from Emporix</span></span>
+          <input
+            value={newGroupId}
+            onChange={e => setNewGroupId(e.target.value)}
+            placeholder="e.g. b2b-customers"
+            style={input}
+          />
         </label>
         <button type="submit" style={{ ...btnPrimary, marginBottom: 1 }}>Add</button>
         {status && <span style={{ fontSize: 11, color: '#dc2626' }}>{status}</span>}
