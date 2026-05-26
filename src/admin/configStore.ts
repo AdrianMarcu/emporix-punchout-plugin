@@ -9,6 +9,10 @@ export interface PluginConfig {
    *  Used to obtain an anonymous customer token so the storefront can adopt
    *  the pre-created cart via loginBasedOnCustomerToken(). */
   storefrontClientId?: string;
+  /** Dedicated Emporix customer account used for punchout sessions.
+   *  loginBasedOnCustomerToken() requires a real customer JWT — the opaque
+   *  anonymous token is rejected by /customer/me. */
+  punchoutCustomer?: { email: string; password: string };
   cxmlEnabled: boolean;
   ociEnabled: boolean;
   operationAllowed: 'create' | 'edit' | 'inspect';
@@ -22,6 +26,7 @@ const DEFAULTS: PluginConfig = {
   sharedSecretHash: '',
   serviceAccount: { clientId: '', clientSecret: '' },
   storefrontBaseUrl: '',
+  punchoutCustomer: undefined,
   cxmlEnabled: true,
   ociEnabled: false,
   operationAllowed: 'edit',
@@ -39,6 +44,9 @@ function seedFromEnv(): Partial<PluginConfig> {
     // Stored as plaintext; verifySecret handles both plaintext and bcrypt
     sharedSecretHash: process.env.PUNCHOUT_SHARED_SECRET ?? '',
     storefrontClientId: process.env.STOREFRONT_CLIENT_ID,
+    punchoutCustomer: process.env.PUNCHOUT_USER_EMAIL
+      ? { email: process.env.PUNCHOUT_USER_EMAIL, password: process.env.PUNCHOUT_USER_PASSWORD ?? '' }
+      : undefined,
   };
 }
 
@@ -83,7 +91,10 @@ export async function getConfig(tenantId: string, _accessToken?: string): Promis
 
 export async function saveConfig(
   tenantId: string,
-  incoming: Omit<PluginConfig, 'sharedSecretHash'> & { sharedSecret?: string },
+  incoming: Omit<PluginConfig, 'sharedSecretHash' | 'punchoutCustomer'> & {
+    sharedSecret?: string;
+    punchoutCustomer?: { email: string; password?: string };
+  },
   _accessToken?: string,
 ): Promise<void> {
   const existing = await getConfig(tenantId).catch(() => null);
@@ -104,11 +115,21 @@ export async function saveConfig(
   const rawStorefrontClientId = configFields.storefrontClientId ?? '';
   const cleanStorefrontClientId = rawStorefrontClientId.replace(/^https?:\/\/\S+?([A-Za-z0-9]{20,})$/, '$1') || rawStorefrontClientId;
 
+  // Preserve existing punchout customer password if the incoming password is blank
+  let punchoutCustomer = incoming.punchoutCustomer;
+  if (punchoutCustomer?.email && !punchoutCustomer.password) {
+    const existingPassword = existing?.punchoutCustomer?.password ?? '';
+    punchoutCustomer = { email: punchoutCustomer.email, password: existingPassword };
+  }
+
   const toSave: PluginConfig = {
     ...DEFAULTS,
     ...(existing ?? {}),
     ...configFields,
     storefrontClientId: cleanStorefrontClientId || undefined,
+    punchoutCustomer: punchoutCustomer?.email
+      ? { email: punchoutCustomer.email, password: punchoutCustomer.password ?? '' }
+      : undefined,
     sharedSecretHash,
     serviceAccount: {
       clientId: incoming.serviceAccount.clientId,

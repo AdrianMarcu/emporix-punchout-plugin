@@ -8,21 +8,26 @@ interface CredentialsForm {
   clientSecret: string;
   storefrontBaseUrl: string;
   storefrontClientId: string;
+  punchoutUserEmail: string;
+  punchoutUserPassword: string;
 }
 
 export default function Credentials() {
-  const [form, setForm] = useState<CredentialsForm>({ sharedSecret: '', clientId: '', clientSecret: '', storefrontBaseUrl: '', storefrontClientId: '' });
+  const [form, setForm] = useState<CredentialsForm>({ sharedSecret: '', clientId: '', clientSecret: '', storefrontBaseUrl: '', storefrontClientId: '', punchoutUserEmail: '', punchoutUserPassword: '' });
   const [status, setStatus] = useState('');
 
   useEffect(() => {
     api.getConfig().then((cfg: unknown) => {
       const c = cfg as Record<string, unknown>;
+      const pc = c.punchoutCustomer as Record<string, string> | undefined;
       setForm({
         sharedSecret: '',
         clientId: String((c.serviceAccount as Record<string, string>)?.clientId ?? ''),
         clientSecret: '',
         storefrontBaseUrl: String(c.storefrontBaseUrl ?? ''),
         storefrontClientId: String(c.storefrontClientId ?? ''),
+        punchoutUserEmail: String(pc?.email ?? ''),
+        punchoutUserPassword: '',
       });
     }).catch(() => {});
   }, []);
@@ -36,6 +41,9 @@ export default function Credentials() {
         serviceAccount: { clientId: form.clientId, clientSecret: form.clientSecret },
         storefrontBaseUrl: form.storefrontBaseUrl,
         storefrontClientId: form.storefrontClientId || undefined,
+        punchoutCustomer: form.punchoutUserEmail
+          ? { email: form.punchoutUserEmail, password: form.punchoutUserPassword || undefined }
+          : undefined,
       });
       setStatus('Saved.');
     } catch {
@@ -78,6 +86,34 @@ export default function Credentials() {
             value={form.storefrontClientId}
             onChange={e => setForm({ ...form, storefrontClientId: e.target.value })}
             placeholder="storefront app client_id…"
+            style={input}
+          />
+        </label>
+      </div>
+
+      <div style={{ ...sectionTitle, marginTop: 16 }}>Punchout Customer Account</div>
+      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
+        A dedicated Emporix customer used during punchout sessions so the storefront can load correctly.
+        Set via env vars <code>PUNCHOUT_USER_EMAIL</code> / <code>PUNCHOUT_USER_PASSWORD</code> or here.
+      </div>
+      <div style={twoCol}>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>Email</span>
+          <input
+            type="email"
+            value={form.punchoutUserEmail}
+            onChange={e => setForm({ ...form, punchoutUserEmail: e.target.value })}
+            placeholder="punchout@yourcompany.com"
+            style={input}
+          />
+        </label>
+        <label style={{ display: 'block' }}>
+          <span style={fieldLabel}>Password <span style={fieldHint}>— leave blank to keep existing</span></span>
+          <input
+            type="password"
+            value={form.punchoutUserPassword}
+            onChange={e => setForm({ ...form, punchoutUserPassword: e.target.value })}
+            placeholder="Enter password…"
             style={input}
           />
         </label>

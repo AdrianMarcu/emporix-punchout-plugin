@@ -68,17 +68,12 @@ export function createSessionRouter(tenantId: string): Router {
       }
       const saToken = await serviceAccountCache.getToken();
 
-      // Get anonymous customer token so the storefront can adopt the cart.
-      // The b2b-showcase reads ?customerToken=&saasToken=&customerTokenExpiresIn=
-      // and calls loginBasedOnCustomerToken() — it then finds carts by saas-token.
+      // Step 1: Get an anonymous session token (provides sessionId for cart creation).
+      // Must use the storefront app's client_id (REACT_APP_CLIENT_ID), not the service account —
+      // the anonymous login endpoint only accepts storefront-registered public clients.
+      // env var takes top priority; then admin-UI config; then bootstrap client as last resort.
       let anonTokenData: AnonymousTokenResponse | null = null;
       try {
-        // GET /customerlogin/auth/anonymous/login?client_id=...&hybris-tenant=...
-        // Must use the storefront app's client_id (REACT_APP_CLIENT_ID), not the
-        // plugin service account — the anonymous login endpoint only accepts
-        // storefront-registered public clients.
-        // env var takes top priority (overrides any corrupt/stale Redis value);
-        // then admin-UI config; then plugin bootstrap client as last resort.
         const storefrontClientId =
           process.env.STOREFRONT_CLIENT_ID ??
           cfg.storefrontClientId ??
@@ -100,14 +95,51 @@ export function createSessionRouter(tenantId: string): Router {
         tenantId,
         appConfig.outboundTimeoutMs,
       );
-      // Use the anonymous login's sessionId as the cart session-id so the
-      // storefront's syncCart(sessionId) finds this cart after loginBasedOnCustomerToken().
+
+      // Step 2: If a punchout customer is configured, log in as that real customer NOW,
+      // BEFORE creating the cart. The cart must be created with the customer's JWT + saasToken
+      // so Emporix treats it as a customer-owned cart — NOT an anonymous cart.
+      //
+      // Why this order matters:
+      //   If we create the cart with the anonymous saasToken, the storefront later tries
+      //   to assign the anonymous cart to the logged-in customer, and Emporix rejects it:
+      //   "Anonymous cart cannot be assigned to a legal entity".
+      //   Creating the cart with the customer's own saasToken avoids this entirely.
+      let cartBearerToken = `Bearer ${saToken}`;   // fallback: service account
+      let cartSaasToken = anonTokenData?.saas_token; // fallback: anonymous saasToken
+      let redirectCustomerToken: string | null = null;
+      let redirectSaasToken: string | null = null;
+      let redirectExpiresIn = anonTokenData?.expires_in ?? 3600;
+
+      if (cfg.punchoutCustomer?.email && cfg.punchoutCustomer?.password && anonTokenData) {
+        try {
+          const customerLogin = await emporixClient.loginCustomer(
+            cfg.punchoutCustomer.email,
+            cfg.punchoutCustomer.password,
+            anonTokenData.access_token,
+          );
+          // Use the customer's own credentials for cart creation — creates a customer-owned cart
+          cartBearerToken = `Bearer ${customerLogin.accessToken}`;
+          cartSaasToken = customerLogin.saasToken;
+          redirectCustomerToken = customerLogin.accessToken;
+          redirectSaasToken = customerLogin.saasToken;
+          redirectExpiresIn = customerLogin.expiresIn;
+          console.log('[session] customer login succeeded — cart will be created as customer-owned (not anonymous)');
+        } catch (loginErr) {
+          console.warn('[session] punchout customer login failed:', loginErr instanceof Error ? loginErr.message : String(loginErr));
+          console.warn('[session] falling back to anonymous cart — storefront may fail to load the cart');
+        }
+      } else if (!cfg.punchoutCustomer?.email) {
+        console.warn('[session] no punchoutCustomer configured — set PUNCHOUT_USER_EMAIL/PUNCHOUT_USER_PASSWORD or configure via admin UI');
+      }
+
+      // Step 3: Create the cart using whichever credentials we have.
       const cartSessionId = anonTokenData?.sessionId ?? session.sessionId;
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
         cartSessionId,
-        `Bearer ${saToken}`,
-        anonTokenData?.saas_token,
+        cartBearerToken,
+        cartSaasToken,
       );
       console.log('[session] cart created — cartId:', cartId);
 
@@ -119,20 +151,14 @@ export function createSessionRouter(tenantId: string): Router {
         secure: process.env.NODE_ENV === 'production',
       });
 
-      // Pass all three token params so the storefront's auth-provider calls
-      // loginBasedOnCustomerToken() → which calls syncAuth() a second time →
-      // which finally runs setSessionId(getSessionId()) with the real sessionId
-      // that AccessToken() stored in localStorage on the first syncAuth pass.
-      // Without this second syncAuth(), sessionId stays null in React state and
-      // cartAccount.id is always undefined ("Cart with code undefined not found").
-      //
-      // saasToken must be truthy for insertLocalStorageValue to store it; if the
-      // anonymous login doesn't return one, fall back to the access_token itself.
+      // Step 4: Build the redirect URL.
+      // Pass customerToken/saasToken/customerTokenExpiresIn so the storefront calls
+      // loginBasedOnCustomerToken() → second syncAuth() → sessionId updates in React state.
       const params = new URLSearchParams({ cartId });
-      if (anonTokenData) {
-        params.set('customerToken', anonTokenData.access_token);
-        params.set('saasToken', anonTokenData.saas_token || anonTokenData.access_token);
-        params.set('customerTokenExpiresIn', String(anonTokenData.expires_in));
+      if (redirectCustomerToken && redirectSaasToken) {
+        params.set('customerToken', redirectCustomerToken);
+        params.set('saasToken', redirectSaasToken);
+        params.set('customerTokenExpiresIn', String(redirectExpiresIn));
       }
       const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
       console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));

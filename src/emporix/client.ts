@@ -1,6 +1,12 @@
 import axios from 'axios';
 import type { EmporixCart, CustomerGroup } from './types';
 
+export interface CustomerLoginResponse {
+  accessToken: string;
+  saasToken: string;
+  expiresIn: number;
+}
+
 export class EmporixClient {
   constructor(
     private apiBase: string,
@@ -54,6 +60,35 @@ export class EmporixClient {
       return res.data;
     } catch (err) {
       throw new Error('Failed to fetch Emporix cart', { cause: err });
+    }
+  }
+
+  /**
+   * Log in as a real customer using email+password against the anonymous session.
+   * POST /customer/{tenant}/login with Authorization: Bearer <anonToken>
+   * Returns { accessToken, saasToken, expiresIn } — a real JWT the storefront accepts for /me.
+   */
+  async loginCustomer(email: string, password: string, anonymousToken: string): Promise<CustomerLoginResponse> {
+    const url = `${this.apiBase}/customer/${this.tenantId}/login`;
+    try {
+      const res = await axios.post<CustomerLoginResponse>(
+        url,
+        { email, password },
+        {
+          ...this.axiosOpts,
+          headers: {
+            Authorization: `Bearer ${anonymousToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      return res.data;
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.response?.data ?? (err instanceof Error ? err.message : String(err));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const httpStatus = (err as any)?.response?.status;
+      throw new Error(`Customer login failed (HTTP ${httpStatus}): ${JSON.stringify(detail)}`, { cause: err });
     }
   }
 
