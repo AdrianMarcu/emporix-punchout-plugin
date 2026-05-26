@@ -10,12 +10,13 @@ import type { PluginConfig } from '../admin/configStore';
 import { TokenCache } from '../emporix/auth';
 import { verifySecret } from '../crypto';
 import { config as appConfig } from '../config';
+import redis from '../redis';
 import type { CxmlCartItem } from '../protocols/cxml/types';
 import type { OciReturnItem } from '../protocols/oci/types';
 import type { EmporixCart } from '../emporix/types';
 import { EmporixClient } from '../emporix/client';
 
-const store = new SessionStore(appConfig.redis);
+const store = new SessionStore(redis);
 
 /** Escape special characters for safe insertion into XML attributes and text nodes. */
 function escapeXml(raw: string): string {

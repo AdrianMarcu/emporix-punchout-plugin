@@ -1,6 +1,6 @@
-import axios from 'axios';
 import { encrypt, decrypt, hashSecret } from '../crypto';
 import { config as appConfig } from '../config';
+import redis from '../redis';
 
 export interface PluginConfig {
   sharedSecretHash: string;
@@ -13,32 +13,34 @@ export interface PluginConfig {
   buyerMappings: Array<{ buyerOrgId: string; customerGroupId: string }>;
 }
 
-const CONFIG_KEY = 'punchout-plugin';
+const CONFIG_PREFIX = 'punchout:config:';
 
-export async function getConfig(tenantId: string, accessToken: string): Promise<PluginConfig | null> {
-  try {
-    const res = await axios.get<{ value: PluginConfig }>(
-      `${appConfig.emporix.apiBase}/configuration/${tenantId}/configurations/${CONFIG_KEY}`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 5000 },
-    );
-    const cfg = res.data.value;
-    cfg.serviceAccount.clientSecret = decrypt(
-      cfg.serviceAccount.clientSecret,
-      appConfig.crypto.aesKey,
-    );
-    return cfg;
-  } catch (err: unknown) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
-    throw err;
+function redisKey(tenantId: string): string {
+  return `${CONFIG_PREFIX}${tenantId}`;
+}
+
+export async function getConfig(tenantId: string, _accessToken?: string): Promise<PluginConfig | null> {
+  const raw = await redis.get(redisKey(tenantId));
+  if (!raw) return null;
+  const cfg = JSON.parse(raw) as PluginConfig;
+  // Decrypt client secret stored at rest
+  if (cfg.serviceAccount.clientSecret) {
+    try {
+      cfg.serviceAccount.clientSecret = decrypt(cfg.serviceAccount.clientSecret, appConfig.crypto.aesKey);
+    } catch {
+      // If decryption fails (e.g. key rotation), return empty secret
+      cfg.serviceAccount.clientSecret = '';
+    }
   }
+  return cfg;
 }
 
 export async function saveConfig(
   tenantId: string,
   incoming: Omit<PluginConfig, 'sharedSecretHash'> & { sharedSecret?: string },
-  accessToken: string,
+  _accessToken?: string,
 ): Promise<void> {
-  const existing = await getConfig(tenantId, accessToken);
+  const existing = await getConfig(tenantId);
 
   const { sharedSecret, ...configFields } = incoming;
 
@@ -50,7 +52,9 @@ export async function saveConfig(
   const clientSecretToEncrypt = (rawClientSecret === '***' && existing)
     ? existing.serviceAccount.clientSecret  // already decrypted by getConfig
     : rawClientSecret;
-  const encryptedClientSecret = encrypt(clientSecretToEncrypt, appConfig.crypto.aesKey);
+  const encryptedClientSecret = clientSecretToEncrypt
+    ? encrypt(clientSecretToEncrypt, appConfig.crypto.aesKey)
+    : '';
 
   const toSave: PluginConfig = {
     ...configFields,
@@ -61,9 +65,5 @@ export async function saveConfig(
     },
   };
 
-  await axios.put(
-    `${appConfig.emporix.apiBase}/configuration/${tenantId}/configurations/${CONFIG_KEY}`,
-    { value: toSave },
-    { headers: { Authorization: `Bearer ${accessToken}` }, timeout: 5000 },
-  );
+  await redis.set(redisKey(tenantId), JSON.stringify(toSave));
 }

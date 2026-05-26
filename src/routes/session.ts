@@ -5,8 +5,9 @@ import { TokenCache } from '../emporix/auth';
 import { getConfig } from '../admin/configStore';
 import type { PluginConfig } from '../admin/configStore';
 import { config as appConfig } from '../config';
+import redis from '../redis';
 
-const store = new SessionStore(appConfig.redis);
+const store = new SessionStore(redis);
 
 export function createSessionRouter(tenantId: string): Router {
   const router = Router();

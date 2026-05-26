@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import type { PunchoutSession } from './types';
 
 const TOKEN_PREFIX = 'punchout:session:';
@@ -7,8 +7,8 @@ const ACTIVE_PREFIX = 'punchout:active:';
 export class SessionStore {
   private redis: Redis;
 
-  constructor(opts: { host: string; port: number }) {
-    this.redis = new Redis({ host: opts.host, port: opts.port, lazyConnect: true });
+  constructor(redis: Redis) {
+    this.redis = redis;
   }
 
   async saveToken(token: string, sessionId: string, ttlSeconds: number): Promise<void> {
