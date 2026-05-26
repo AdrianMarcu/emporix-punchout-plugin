@@ -228,6 +228,9 @@ export function createSessionRouter(tenantId: string): Router {
         params.set('saasToken', redirectSaasToken);
         params.set('customerTokenExpiresIn', String(redirectExpiresIn));
       }
+      // Widget script reads this from the URL on first load and stores it in sessionStorage.
+      // This lets the "Return Cart to Procurement" button work even cross-domain.
+      params.set('punchoutSessionId', sessionId);
       const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
       console.log('[session] redirecting to:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
       res.redirect(redirectUrl);

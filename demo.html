@@ -1,66 +1,19 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>Procurement System Simulator</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Punchout Demo — Redirect</title>
+</head>
 <body>
-<h2>Acme Corp — Procurement System</h2>
-<button onclick="startPunchout()">Shop on Emporix Store</button>
-<div id="status"></div>
-<div id="cart" style="display:none">
-    <h3>Items returned from store:</h3>
-    <pre id="cartData"></pre>
-</div>
-
-<!-- Hidden return target — procurement system receives cart here -->
-<form id="returnForm" style="display:none">
-    <textarea name="cXMLData" id="cXMLData"></textarea>
-</form>
-
+<p>The demo is now hosted directly on the plugin.</p>
+<p>
+  Open <a id="link" href="#"></a> in your browser.
+</p>
 <script>
-    const PLUGIN = 'https://emporix-punchout-plugin-production.up.railway.app';
-
-    async function startPunchout() {
-        document.getElementById('status').textContent = 'Sending PunchOutSetupRequest…';
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<cXML payloadID="demo-001" timestamp="${new Date().toISOString()}">
-  <Header>
-    <From><Credential domain="NetworkId"><Identity>demo-buyer-org</Identity></Credential></From>
-    <To><Credential domain="NetworkId"><Identity>supplier</Identity></Credential></To>
-    <Sender>
-      <Credential domain="NetworkId">
-        <Identity>demo-buyer-org</Identity>
-        <SharedSecret>demo-secret-2026</SharedSecret>
-      </Credential>
-      <UserAgent>DemoSimulator/1.0</UserAgent>
-    </Sender>
-  </Header>
-  <Request deploymentMode="test">
-    <PunchOutSetupRequest operation="create">
-      <BuyerCookie>demo-cookie-001</BuyerCookie>
-      <BrowserFormPost>
-        <URL>${location.href}#return</URL>
-      </BrowserFormPost>
-    </PunchOutSetupRequest>
-  </Request>
-</cXML>`;
-
-        const res  = await fetch(`${PLUGIN}/punchout/cxml/setup`, {
-            method: 'POST', headers: { 'Content-Type': 'text/xml' }, body: xml
-        });
-        const text = await res.text();
-        const url  = text.match(/<URL>(.*?)<\/URL>/)?.[1];
-        document.getElementById('status').textContent = `Got session URL. Opening store…`;
-        window.open(url, '_blank');
-    }
-
-    // Receive the cart POST back from the plugin
-    if (location.hash === '#return') {
-        const params = new URLSearchParams(location.search);
-        const cxml = params.get('cXMLData');
-        if (cxml) {
-            document.getElementById('cart').style.display = 'block';
-            document.getElementById('cartData').textContent = cxml;
-        }
-    }
+  var PLUGIN = 'https://emporix-punchout-plugin-production.up.railway.app';
+  var link = document.getElementById('link');
+  link.href = PLUGIN + '/punchout/demo';
+  link.textContent = PLUGIN + '/punchout/demo';
 </script>
 </body>
 </html>
