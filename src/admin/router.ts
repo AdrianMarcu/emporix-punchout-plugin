@@ -22,7 +22,10 @@ export function createAdminRouter(): Router {
   router.get('/config', async (req: Request, res: Response) => {
     const tenantId = req.tenantId!;
     const token = extractToken(req);
-    const cfg = await getConfig(tenantId, token).catch(() => null);
+    const cfg = await getConfig(tenantId, token).catch((err: unknown) => {
+      console.error('[admin/config GET] load failed:', err instanceof Error ? err.message : String(err));
+      return null;
+    });
     if (!cfg) { res.json({}); return; }
     const { serviceAccount, sharedSecretHash: _omit, ...safe } = cfg;
     res.json({ ...safe, serviceAccount: { clientId: serviceAccount.clientId, clientSecret: '***' } });
@@ -34,8 +37,10 @@ export function createAdminRouter(): Router {
     try {
       await saveConfig(tenantId, req.body as Parameters<typeof saveConfig>[1], token);
       res.json({ ok: true });
-    } catch {
-      res.status(500).json({ error: 'Failed to save config' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[admin/config POST] save failed:', msg);
+      res.status(500).json({ error: 'Failed to save config', detail: msg });
     }
   });
 
