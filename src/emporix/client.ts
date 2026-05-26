@@ -12,11 +12,12 @@ export class EmporixClient {
     return { timeout: this.timeoutMs };
   }
 
-  async createGuestCart(customerGroupId: string, accessToken: string): Promise<string> {
+  async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
+    const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
     try {
       const res = await axios.post<{ cartId: string }>(
-        `${this.apiBase}/cart/${this.tenantId}/carts`,
-        { currency: 'USD', customerGroup: customerGroupId },
+        url,
+        { sessionId, currency: 'USD', customerGroup: customerGroupId || undefined },
         { ...this.axiosOpts, headers: { Authorization: accessToken } },
       );
       return res.data.cartId;

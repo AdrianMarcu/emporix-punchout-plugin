@@ -68,6 +68,7 @@ export function createSessionRouter(tenantId: string): Router {
       );
       const cartId = await emporixClient.createGuestCart(
         session.customerGroupId,
+        session.sessionId,
         `Bearer ${accessToken}`,
       );
       await store.updateCartId(sessionId, cartId);
