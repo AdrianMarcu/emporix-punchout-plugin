@@ -75,10 +75,15 @@ export async function saveConfig(
     ? existing.serviceAccount.clientSecret
     : rawClientSecret;
 
+  // Strip any accidental URL prefix from storefrontClientId (e.g. pasted from browser address bar)
+  const rawStorefrontClientId = configFields.storefrontClientId ?? '';
+  const cleanStorefrontClientId = rawStorefrontClientId.replace(/^https?:\/\/\S+?([A-Za-z0-9]{20,})$/, '$1') || rawStorefrontClientId;
+
   const toSave: PluginConfig = {
     ...DEFAULTS,
     ...(existing ?? {}),
     ...configFields,
+    storefrontClientId: cleanStorefrontClientId || undefined,
     sharedSecretHash,
     serviceAccount: {
       clientId: incoming.serviceAccount.clientId,

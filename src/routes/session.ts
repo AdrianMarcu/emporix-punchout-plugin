@@ -77,13 +77,13 @@ export function createSessionRouter(tenantId: string): Router {
         // Must use the storefront app's client_id (REACT_APP_CLIENT_ID), not the
         // plugin service account — the anonymous login endpoint only accepts
         // storefront-registered public clients.
-        // Priority: admin-UI config → STOREFRONT_CLIENT_ID env var → plugin bootstrap client
-        // Note: env var is ignored when Redis config exists, so check it explicitly here.
+        // env var takes top priority (overrides any corrupt/stale Redis value);
+        // then admin-UI config; then plugin bootstrap client as last resort.
         const storefrontClientId =
-          cfg.storefrontClientId ??
           process.env.STOREFRONT_CLIENT_ID ??
+          cfg.storefrontClientId ??
           appConfig.emporix.clientId;
-        const source = cfg.storefrontClientId ? 'config' : process.env.STOREFRONT_CLIENT_ID ? 'env-var' : 'fallback';
+        const source = process.env.STOREFRONT_CLIENT_ID ? 'env-var' : cfg.storefrontClientId ? 'config' : 'fallback';
         console.log('[session] anon token — using client_id:', storefrontClientId, '| source:', source);
         anonTokenData = await getAnonymousTokenFull(
           appConfig.emporix.apiBase,
