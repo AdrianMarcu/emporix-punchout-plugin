@@ -140,11 +140,17 @@ export class EmporixClient {
   }
 
   /**
-   * Log in as a real customer using email+password against the anonymous session.
-   * POST /customer/{tenant}/login with Authorization: Bearer <anonToken>
-   * Returns { accessToken, saasToken, expiresIn } — a real JWT the storefront accepts for /me.
+   * Log in as a real customer using email+password.
+   * POST /customer/{tenant}/login — returns { accessToken, saasToken, expiresIn }.
+   *
+   * Deliberately called WITHOUT an anonymous token in the Authorization header.
+   * Passing an anonymous token would link the customer's new session to that
+   * anonymous session ID. The storefront browser calls the same anonymous login
+   * endpoint with the same client_id and may get back the same session, causing
+   * Emporix's getCart merge logic to find the same cart as both the "session cart"
+   * and the "customer cart" → HTTP 400 "Cart cannot be merged into itself".
    */
-  async loginCustomer(email: string, password: string, anonymousToken: string): Promise<CustomerLoginResponse> {
+  async loginCustomer(email: string, password: string): Promise<CustomerLoginResponse> {
     const url = `${this.apiBase}/customer/${this.tenantId}/login`;
     try {
       const res = await axios.post<CustomerLoginResponse>(
@@ -152,10 +158,7 @@ export class EmporixClient {
         { email, password },
         {
           ...this.axiosOpts,
-          headers: {
-            Authorization: `Bearer ${anonymousToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
         },
       );
       return res.data;

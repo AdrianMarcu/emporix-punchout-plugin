@@ -118,7 +118,6 @@ export function createSessionRouter(tenantId: string): Router {
           const customerLogin = await emporixClient.loginCustomer(
             cfg.punchoutCustomer.email,
             cfg.punchoutCustomer.password,
-            anonTokenData.access_token,
           );
           // Use the customer JWT for cart creation — creates a customer-owned cart.
           // Do NOT pass saasToken as a cart header: Emporix has a unique index on saasToken
