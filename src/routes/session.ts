@@ -110,6 +110,8 @@ export function createSessionRouter(tenantId: string): Router {
       let redirectCustomerToken: string | null = null;
       let redirectSaasToken: string | null = null;
       let redirectExpiresIn = anonTokenData?.expires_in ?? 3600;
+      // Existing cart IDs discovered during cleanup — used as 409 fallback.
+      let existingCustomerCartIds: string[] = [];
 
       if (cfg.punchoutCustomer?.email && cfg.punchoutCustomer?.password && anonTokenData) {
         try {
@@ -131,32 +133,22 @@ export function createSessionRouter(tenantId: string): Router {
           redirectExpiresIn = customerLogin.expiresIn;
           console.log('[session] customer login succeeded — cart will be created as customer-owned (not anonymous)');
 
-          // The punchout customer is a shared account — delete any leftover carts from
-          // previous sessions before creating a new one (avoids 409 duplicate-key error).
-          // Use GET /customer/{tenant}/me to get the customerNumber, then query carts
-          // via the service account (which has visibility of all customers' carts).
+          // Discover existing carts for this customer (used as fallback if cart creation hits 409).
+          // Emporix soft-deletes carts, so DELETE may not clear the unique index — we keep the
+          // list so we can reuse an existing cart if creation still fails with 409.
           try {
             const me = await emporixClient.getCustomerMe(cartBearerToken);
             const customerNumber = me.customerNumber;
             console.log('[session] punchout customer number:', customerNumber);
-            const existingCartIds = await emporixClient.listCartIdsByCustomer(
+            existingCustomerCartIds = await emporixClient.listCartIdsByCustomer(
               customerNumber,
               `Bearer ${saToken}`,
             );
-            if (existingCartIds.length > 0) {
-              console.log(`[session] clearing ${existingCartIds.length} existing cart(s) for customer ${customerNumber}`);
-              await Promise.all(
-                existingCartIds.map(id =>
-                  emporixClient.deleteCart(id, `Bearer ${saToken}`).catch(delErr =>
-                    console.warn(`[session] could not delete cart ${id}:`, delErr instanceof Error ? delErr.message : String(delErr)),
-                  ),
-                ),
-              );
-            } else {
-              console.log('[session] no existing carts found for punchout customer');
+            if (existingCustomerCartIds.length > 0) {
+              console.log(`[session] found ${existingCustomerCartIds.length} existing cart(s) for customer ${customerNumber} — will reuse on 409`);
             }
-          } catch (cleanupErr) {
-            console.warn('[session] cart cleanup error (will still attempt cart creation):', cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr));
+          } catch (lookupErr) {
+            console.warn('[session] existing-cart lookup failed:', lookupErr instanceof Error ? lookupErr.message : String(lookupErr));
           }
         } catch (loginErr) {
           console.warn('[session] punchout customer login failed:', loginErr instanceof Error ? loginErr.message : String(loginErr));
@@ -167,14 +159,28 @@ export function createSessionRouter(tenantId: string): Router {
       }
 
       // Step 3: Create the cart using whichever credentials we have.
+      // On 409 (Emporix soft-deleted carts keep their unique index), fall back to reusing
+      // the existing cart — it will be empty from a previous abandoned punchout session.
       const cartSessionId = anonTokenData?.sessionId ?? session.sessionId;
-      const cartId = await emporixClient.createGuestCart(
-        session.customerGroupId,
-        cartSessionId,
-        cartBearerToken,
-        cartSaasToken,
-      );
-      console.log('[session] cart created — cartId:', cartId);
+      let cartId: string;
+      try {
+        cartId = await emporixClient.createGuestCart(
+          session.customerGroupId,
+          cartSessionId,
+          cartBearerToken,
+          cartSaasToken,
+        );
+        console.log('[session] cart created — cartId:', cartId);
+      } catch (createErr: unknown) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const httpStatus = (createErr as any)?.cause?.response?.status;
+        if (httpStatus === 409 && existingCustomerCartIds.length > 0) {
+          cartId = existingCustomerCartIds[0];
+          console.log('[session] 409 on cart creation — reusing existing cart:', cartId);
+        } else {
+          throw createErr;
+        }
+      }
 
       await store.updateCartId(sessionId, cartId);
       res.cookie('punchout_session', sessionId, {
