@@ -1,0 +1,4 @@
+/* Only apply letter-spacing when the user has typed something — keeps placeholder readable */
+input[type="password"]:not(:placeholder-shown) {
+  letter-spacing: 1px;
+}

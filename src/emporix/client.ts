@@ -14,8 +14,8 @@ export class EmporixClient {
 
   async createGuestCart(customerGroupId: string, sessionId: string, accessToken: string): Promise<string> {
     const url = `${this.apiBase}/cart/${this.tenantId}/carts`;
-    const body = { 'session-id': sessionId, sessionId, currency: 'USD', customerGroup: customerGroupId || undefined };
-    console.log('[createGuestCart] POST', url, JSON.stringify(body));
+    const body: Record<string, unknown> = { sessionId, currency: 'USD' };
+    if (customerGroupId) body.customerGroup = customerGroupId;
     try {
       const res = await axios.post<{ cartId: string }>(
         url, body,
@@ -25,8 +25,7 @@ export class EmporixClient {
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detail = (err as any)?.response?.data;
-      console.error('[createGuestCart] failed:', JSON.stringify(detail));
-      throw new Error('Failed to create Emporix cart', { cause: err });
+      throw new Error(`Failed to create Emporix cart: ${JSON.stringify(detail)}`, { cause: err });
     }
   }
 

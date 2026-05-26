@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+/** Service-account token via OAuth2 client_credentials — for admin API calls */
 export class TokenCache {
   private token: string | null = null;
   private expiresAt = 0;
@@ -41,4 +42,27 @@ export class TokenCache {
     this.expiresAt = Date.now() + safeExpiresIn * 1000;
     return this.token;
   }
+}
+
+/**
+ * Anonymous customer token — required for cart creation.
+ * Emporix embeds the customer/session identity in this token; passing it to
+ * POST /cart/{tenant}/carts satisfies the session-id/customerId requirement.
+ */
+export async function getAnonymousToken(
+  apiBase: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<string> {
+  const params = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const res = await axios.post<{ access_token: string }>(
+    `${apiBase}/customerlogin/auth/anonymous/token`,
+    params.toString(),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
+  );
+  return res.data.access_token;
 }
