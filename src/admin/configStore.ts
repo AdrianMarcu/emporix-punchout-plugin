@@ -38,6 +38,7 @@ function seedFromEnv(): Partial<PluginConfig> {
     storefrontBaseUrl: process.env.STOREFRONT_BASE_URL ?? '',
     // Stored as plaintext; verifySecret handles both plaintext and bcrypt
     sharedSecretHash: process.env.PUNCHOUT_SHARED_SECRET ?? '',
+    storefrontClientId: process.env.STOREFRONT_CLIENT_ID,
   };
 }
 
