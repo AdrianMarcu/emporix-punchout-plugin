@@ -64,6 +64,40 @@ export class EmporixClient {
   }
 
   /**
+   * Return all cart IDs visible to the given bearer token.
+   * Handles both array and paginated `{ data: [...] }` response shapes.
+   * Never throws — returns [] on error so the caller can proceed.
+   */
+  async listCartIds(bearerToken: string): Promise<string[]> {
+    try {
+      const res = await axios.get(
+        `${this.apiBase}/cart/${this.tenantId}/carts`,
+        { ...this.axiosOpts, headers: { Authorization: bearerToken } },
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const carts: any[] = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return carts.map((c: any) => c.id || c.cartId).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Delete a cart by ID. Uses the provided bearer token (service account recommended). */
+  async deleteCart(cartId: string, bearerToken: string): Promise<void> {
+    try {
+      await axios.delete(
+        `${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
+        { ...this.axiosOpts, headers: { Authorization: bearerToken } },
+      );
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = (err as any)?.response?.status;
+      if (status !== 404) throw err; // 404 = already gone, ignore
+    }
+  }
+
+  /**
    * Log in as a real customer using email+password against the anonymous session.
    * POST /customer/{tenant}/login with Authorization: Bearer <anonToken>
    * Returns { accessToken, saasToken, expiresIn } — a real JWT the storefront accepts for /me.

@@ -125,6 +125,20 @@ export function createSessionRouter(tenantId: string): Router {
           redirectSaasToken = customerLogin.saasToken;
           redirectExpiresIn = customerLogin.expiresIn;
           console.log('[session] customer login succeeded — cart will be created as customer-owned (not anonymous)');
+
+          // The punchout customer is a shared account — delete any leftover carts from
+          // previous sessions before creating a new one (avoids 409 duplicate-key error).
+          const existingCartIds = await emporixClient.listCartIds(cartBearerToken);
+          if (existingCartIds.length > 0) {
+            console.log(`[session] clearing ${existingCartIds.length} existing cart(s) for punchout customer`);
+            await Promise.all(
+              existingCartIds.map(id =>
+                emporixClient.deleteCart(id, `Bearer ${saToken}`).catch(delErr =>
+                  console.warn(`[session] could not delete cart ${id}:`, delErr instanceof Error ? delErr.message : String(delErr)),
+                ),
+              ),
+            );
+          }
         } catch (loginErr) {
           console.warn('[session] punchout customer login failed:', loginErr instanceof Error ? loginErr.message : String(loginErr));
           console.warn('[session] falling back to anonymous cart — storefront may fail to load the cart');
