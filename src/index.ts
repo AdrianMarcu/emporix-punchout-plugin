@@ -45,7 +45,9 @@ app.use('/admin-ui', (_req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../src/admin-ui-dist')));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
-app.use('/punchout', punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
+// Punchout endpoints are called by external procurement systems (SAP Ariba, Coupa, etc.)
+// and the demo simulator — allow any origin.
+app.use('/punchout', cors(), punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
 app.use('/admin', adminCors, createAdminRouter());
 app.use('/', createWidgetRouter());
