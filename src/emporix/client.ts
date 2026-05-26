@@ -92,11 +92,16 @@ export class EmporixClient {
       );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw = res.data as any;
+      console.log('[listCartIdsByCustomer] response keys:', raw && typeof raw === 'object' ? Object.keys(raw).join(', ') : String(raw));
+      console.log('[listCartIdsByCustomer] response preview:', JSON.stringify(raw).slice(0, 400));
       const carts: unknown[] = Array.isArray(raw) ? raw
         : Array.isArray(raw?.data) ? raw.data
         : Array.isArray(raw?.items) ? raw.items
+        : Array.isArray(raw?.carts) ? raw.carts
+        : Array.isArray(raw?.results) ? raw.results
+        : Array.isArray(raw?.content) ? raw.content
         : [];
-      console.log('[listCartIdsByCustomer] raw response type:', Array.isArray(raw) ? 'array' : typeof raw, '| count:', carts.length);
+      console.log('[listCartIdsByCustomer] parsed cart count:', carts.length);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return carts.map((c: any) => c.id || c.cartId).filter(Boolean);
     } catch (err) {
