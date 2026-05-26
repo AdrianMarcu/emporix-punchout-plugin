@@ -83,8 +83,10 @@ export function createAdminRouter(): Router {
       const client = new EmporixClient(appConfig.emporix.apiBase, tenantId, appConfig.outboundTimeoutMs);
       const groups = await client.getCustomerGroups(`Bearer ${serviceToken}`);
       res.json(groups);
-    } catch {
-      res.status(502).json({ error: 'Failed to fetch customer groups' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[admin/customer-groups] failed:', msg);
+      res.status(502).json({ error: 'Failed to fetch customer groups', detail: msg });
     }
   });
 

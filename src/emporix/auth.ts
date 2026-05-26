@@ -23,7 +23,7 @@ export class TokenCache {
     let data: { access_token: string; expires_in: number };
     try {
       const res = await axios.post<typeof data>(
-        `${this.apiBase}/customerlogin/auth/anonymous/token`,
+        `${this.apiBase}/oauth/token`,
         params.toString(),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 },
       );
