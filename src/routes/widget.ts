@@ -87,9 +87,29 @@ export function createWidgetRouter(tenantId: string): Router {
       localStorage.setItem('saasToken',              ptSaas);
       localStorage.setItem('customerTokenExpiresIn', String(expiresAt));
       localStorage.setItem('tenant',                 TENANT);
-      // Reload — React will mount with user in localStorage → isLoggedIn=true,
-      // no loginBasedOnCustomerToken call, no /iam/scopes call.
-      window.location.reload();
+
+      // Pre-create the customer session context so the storefront's
+      // GET /session-context/{tenant}/me/context doesn't 404.
+      // b2b-showcase calls this when isLoggedIn=true; if it 404s the error
+      // is uncaught → setLoading(false) never runs → infinite loading screen.
+      // Emporix CORS allows POST from any origin; we wait for it before reloading
+      // so the resource exists when the storefront makes the GET on next mount.
+      fetch(API_BASE + '/session-context/' + TENANT + '/me/context', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + ptToken, 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      .then(function(r) {
+        console.log('[punchout-widget] session-context POST:', r.status);
+      })
+      .catch(function(e) {
+        console.warn('[punchout-widget] session-context POST failed:', e);
+      })
+      .then(function() {
+        // Reload — React will mount with user in localStorage → isLoggedIn=true,
+        // no loginBasedOnCustomerToken call, no /iam/scopes call.
+        window.location.reload();
+      });
     })
     .catch(function(err) {
       // /me fetch failed — fall back to externalCustomerToken so syncAuth() can
