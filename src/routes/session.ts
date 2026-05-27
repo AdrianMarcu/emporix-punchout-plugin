@@ -226,9 +226,13 @@ export function createSessionRouter(tenantId: string): Router {
         params.set('cartId', cartId);
       }
       if (redirectCustomerToken && redirectSaasToken) {
-        params.set('customerToken', redirectCustomerToken);
-        params.set('saasToken', redirectSaasToken);
-        params.set('customerTokenExpiresIn', String(redirectExpiresIn));
+        // Use pt_* prefix so the storefront's syncAuth() does NOT process these directly.
+        // punchout-widget.js intercepts them, injects into localStorage under the keys
+        // syncAuth() checks (externalCustomerToken / externalSaasToken / externalTokenExpiresIn),
+        // strips the params, and reloads — preventing the infinite-reload loop.
+        params.set('pt_customerToken', redirectCustomerToken);
+        params.set('pt_saasToken', redirectSaasToken);
+        params.set('pt_expiresIn', String(redirectExpiresIn));
       }
       // punchoutSessionId is read by punchout-widget.js on the storefront.
       // The widget stores it in sessionStorage so the "Return Cart to Procurement"
