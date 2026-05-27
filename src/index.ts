@@ -21,6 +21,12 @@ app.use(helmet({
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       'frame-ancestors': ["'self'", DASHBOARD_ORIGIN],
+      // Allow inline scripts and event handlers for server-rendered HTML pages:
+      // - /punchout/demo  — demo launcher (inline <script> block)
+      // - /punchout/return — auto-submit form uses <body onload="...">
+      // - /session/*      — redirect pages
+      'script-src': ["'self'", "'unsafe-inline'"],
+      'script-src-attr': ["'unsafe-inline'"],
     },
   },
 }));
