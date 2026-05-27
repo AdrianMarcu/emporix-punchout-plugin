@@ -180,14 +180,19 @@ export class EmporixClient {
    * Log in as a real customer using email+password.
    * POST /customer/{tenant}/login — returns { accessToken, saasToken, expiresIn }.
    *
-   * Deliberately called WITHOUT an anonymous token in the Authorization header.
-   * Passing an anonymous token would link the customer's new session to that
-   * anonymous session ID. The storefront browser calls the same anonymous login
-   * endpoint with the same client_id and may get back the same session, causing
-   * Emporix's getCart merge logic to find the same cart as both the "session cart"
-   * and the "customer cart" → HTTP 400 "Cart cannot be merged into itself".
+   * The Emporix API gateway (Apigee) requires a valid Bearer token on every
+   * request, including the customer login endpoint. We pass the service account
+   * token (client_credentials grant) to satisfy the gateway.
+   *
+   * We deliberately do NOT pass an anonymous customer token here. Passing an
+   * anonymous token links the customer's new session to that anonymous session ID.
+   * The storefront browser calls the same anonymous login endpoint with the same
+   * client_id and inherits the same session, causing Emporix's getCart merge logic
+   * to find the same cart as both the "session cart" and the "customer cart" →
+   * HTTP 400 "Cart cannot be merged into itself". A service account token has no
+   * anonymous session and does not cause this linkage.
    */
-  async loginCustomer(email: string, password: string): Promise<CustomerLoginResponse> {
+  async loginCustomer(email: string, password: string, serviceAccountBearer: string): Promise<CustomerLoginResponse> {
     const url = `${this.apiBase}/customer/${this.tenantId}/login`;
     try {
       const res = await axios.post<CustomerLoginResponse>(
@@ -195,7 +200,10 @@ export class EmporixClient {
         { email, password },
         {
           ...this.axiosOpts,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            Authorization: serviceAccountBearer,
+            'Content-Type': 'application/json',
+          },
         },
       );
       return res.data;
