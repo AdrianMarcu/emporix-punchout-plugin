@@ -31,10 +31,10 @@ export function createWidgetRouter(): Router {
   var fromUrl = urlParams.get('punchoutSessionId');
   if (fromUrl) {
     sessionStorage.setItem(SK, fromUrl);
-    // Clean the param from the visible URL without triggering a navigation
-    urlParams.delete('punchoutSessionId');
-    var clean = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '') + window.location.hash;
-    history.replaceState(null, '', clean);
+    // Do NOT call history.replaceState here. Calling it while the React app is
+    // initialising triggers React Router to re-run URL-param-reading effects
+    // (auth-provider loginBasedOnCustomerToken) with the same params still
+    // present → infinite reload loop. Let the SPA manage its own URL cleanup.
   }
 
   var sessionId = sessionStorage.getItem(SK);
