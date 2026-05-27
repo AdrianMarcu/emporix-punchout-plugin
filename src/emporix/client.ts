@@ -79,21 +79,111 @@ export class EmporixClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const first = itemArr[0] as any;
         console.log('[getCart] first item keys:', Object.keys(first).join(', '));
-        console.log('[getCart] first item sample:', JSON.stringify(first).slice(0, 500));
+        console.log('[getCart] first item sample:', JSON.stringify(first).slice(0, 800));
+        if (first.product) console.log('[getCart] first item.product:', JSON.stringify(first.product).slice(0, 400));
+        if (first.price) console.log('[getCart] first item.price:', JSON.stringify(first.price));
+        if (first.unitPrice) console.log('[getCart] first item.unitPrice:', JSON.stringify(first.unitPrice));
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items = itemArr.map((i: any) => ({
-        itemId: i.id ?? '',
-        sku:      i.itemYrn?.split(':').pop() ?? i.product?.id ?? i.productId ?? i.code ?? i.sku ?? '',
-        name:     typeof i.name === 'string' ? i.name : (i.name?.en ?? i.productName ?? ''),
-        quantity: Number(i.quantity ?? 1),
-        price: {
-          amount:   Number(i.unitPrice?.effectiveValue ?? i.price?.amount ?? i.itemPrice?.effectiveValue ?? 0),
-          currency: i.unitPrice?.currency ?? i.price?.currency ?? rawCart.currency ?? 'USD',
-        },
-        uom: i.measurementUnit ?? i.uom ?? 'EA',
-      }));
+      const items = itemArr.map((i: any) => {
+        // --- SKU ---
+        // Prefer the human-readable product code; fall back to product ID, then
+        // extract from itemYrn: urn:...:ant2;{productId}---{lineItemId} → productId
+        const skuFromYrn = i.itemYrn?.split(':').pop()?.split(';').pop()?.split('---')[0];
+        const sku = i.product?.code
+          ?? i.product?.id
+          ?? skuFromYrn
+          ?? i.productId
+          ?? i.code
+          ?? i.sku
+          ?? '';
+
+        // --- Name ---
+        // Anonymous cart items often lack a populated `name` field; look inside
+        // the nested product object (localized or plain string).
+        const rawName = i.product?.name ?? i.name ?? i.productName;
+        const name = typeof rawName === 'string'
+          ? rawName
+          : (rawName?.en ?? rawName?.['en-US'] ?? Object.values(rawName ?? {})[0] ?? '');
+
+        // --- Price ---
+        // Emporix price objects vary by cart type; try all known field paths.
+        const priceAmount = Number(
+          i.price?.effectiveAmount
+          ?? i.price?.amount
+          ?? i.unitPrice?.effectiveValue
+          ?? i.unitPrice?.originalValue
+          ?? i.itemPrice?.effectiveAmount
+          ?? i.itemPrice?.effectiveValue
+          ?? i.totalPrice?.effectiveAmount
+          ?? i.originalPrice?.amount
+          ?? 0,
+        );
+        const priceCurrency =
+          i.price?.currency
+          ?? i.unitPrice?.currency
+          ?? i.itemPrice?.currency
+          ?? rawCart.currency
+          ?? 'USD';
+
+        return {
+          itemId: i.id ?? '',
+          sku,
+          name,
+          quantity: Number(i.quantity ?? 1),
+          price: { amount: priceAmount, currency: priceCurrency },
+          uom: i.measurementUnit ?? i.uom ?? 'EA',
+        };
+      });
+
+      // Product API enrichment: fill in missing names (and codes if still blank)
+      // for items where the cart service returned empty data.
+      const needsEnrichment = items.filter(it => !it.name);
+      if (needsEnrichment.length > 0) {
+        // Build a map of productId → item index so we can back-fill efficiently.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const idToItems = new Map<string, typeof items[number][]>();
+        for (const it of needsEnrichment) {
+          // itemYrn → urn:yaas:...:ant2;{productId} — extract the productId portion
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const raw = itemArr.find((r: any) => r.id === it.itemId) as any;
+          const productId =
+            raw?.product?.id
+            ?? raw?.itemYrn?.split(':').pop()?.split(';').pop()?.split('---')[0];
+          if (!productId) continue;
+          if (!idToItems.has(productId)) idToItems.set(productId, []);
+          idToItems.get(productId)!.push(it);
+        }
+
+        console.log('[getCart] enriching', idToItems.size, 'products from product API');
+        await Promise.allSettled(
+          Array.from(idToItems.entries()).map(async ([productId, targets]) => {
+            try {
+              const prodRes = await axios.get(
+                `${this.apiBase}/product/${this.tenantId}/products/${productId}`,
+                { ...this.axiosOpts, headers },
+              );
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const p = prodRes.data as any;
+              const rawPName = p.name;
+              const productName = typeof rawPName === 'string'
+                ? rawPName
+                : (rawPName?.en ?? rawPName?.['en-US'] ?? Object.values(rawPName ?? {})[0] ?? '');
+              const productCode = p.code ?? productId;
+              console.log(`[getCart] enriched product ${productId}: code=${productCode} name=${productName}`);
+              for (const it of targets) {
+                if (!it.name) it.name = productName;
+                if (!it.sku) it.sku = productCode;
+              }
+            } catch (err) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const status = (err as any)?.response?.status;
+              console.warn(`[getCart] product API fetch failed for ${productId}: HTTP ${status ?? 'err'}`);
+            }
+          }),
+        );
+      }
 
       return {
         cartId: rawCart.id ?? cartId,

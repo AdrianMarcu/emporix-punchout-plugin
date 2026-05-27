@@ -55,7 +55,7 @@ export function buildOrderMessage(
       .up()
       .ele('ItemDetail')
       .ele('UnitPrice').ele('Money', { currency: item.currency }).txt(item.unitPrice.toFixed(2)).up().up()
-      .ele('Description', { 'xml:lang': 'en' }).txt(item.name).up()
+      .ele('Description', { 'xml:lang': 'en' }).txt(item.name || item.sku || 'Item').up()
       .ele('UnitOfMeasure').txt(item.uom).up()
       .up()
       .up();
