@@ -323,18 +323,31 @@ function buildDemoLaunchPage(pluginHost: string): string {
   h1{font-size:24px;margin-bottom:4px}
   .sub{color:#64748b;margin-bottom:32px;font-size:14px}
   .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;margin-bottom:20px}
+  label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+  .url-row{display:flex;gap:8px;margin-bottom:20px}
+  .url-row input{flex:1;padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;color:#1e293b}
+  .url-row input:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.15)}
+  .url-row button{padding:9px 14px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;color:#475569}
+  .url-row button:hover{background:#e2e8f0}
   .btn{background:#2563eb;color:#fff;border:none;padding:12px 28px;border-radius:6px;font-size:15px;cursor:pointer;font-weight:600}
   .btn:hover{background:#1d4ed8}
   .btn:disabled{background:#94a3b8;cursor:not-allowed}
   #status{margin-top:16px;font-size:13px;color:#475569;white-space:pre-wrap}
   code{background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:12px}
+  .hint{font-size:12px;color:#94a3b8;margin-top:4px}
 </style>
 </head>
 <body>
 <h1>🏢 Procurement System Simulator</h1>
 <p class="sub">Simulates a procurement platform (Ariba, Coupa, SAP…) initiating a punchout session.</p>
 <div class="card">
-  <p>Click the button below to send a <code>PunchOutSetupRequest</code> to the plugin. The storefront will open in a new tab. Add items, then click the blue <strong>"Return Cart to Procurement"</strong> button in the storefront.</p>
+  <label for="returnUrl">BrowserFormPost URL (cart cXML destination)</label>
+  <div class="url-row">
+    <input id="returnUrl" type="url" value="https://punchoutcommerce.com/tools/cxml-punchout-return" spellcheck="false">
+    <button onclick="document.getElementById('returnUrl').value='${escaped}/punchout/demo'">Use local demo</button>
+    <button onclick="document.getElementById('returnUrl').value='https://punchoutcommerce.com/tools/cxml-punchout-return'">punchoutcommerce.com</button>
+  </div>
+  <p class="hint">The plugin will POST the <code>PunchOutOrderMessage</code> to this URL when the user returns their cart.</p>
   <button class="btn" id="launchBtn" onclick="startPunchout()">🛒 Start Punchout Session</button>
   <div id="status"></div>
 </div>
@@ -343,6 +356,8 @@ var PLUGIN = '${escaped}';
 async function startPunchout() {
   var btn = document.getElementById('launchBtn');
   var status = document.getElementById('status');
+  var returnUrl = document.getElementById('returnUrl').value.trim();
+  if (!returnUrl) { status.textContent = 'Please enter a BrowserFormPost URL.'; return; }
   btn.disabled = true;
   status.textContent = 'Sending PunchOutSetupRequest…';
   var ts = new Date().toISOString();
@@ -360,7 +375,7 @@ async function startPunchout() {
     + '<Request deploymentMode="test">'
     + '<PunchOutSetupRequest operation="create">'
     + '<BuyerCookie>demo-cookie-' + Date.now() + '</BuyerCookie>'
-    + '<BrowserFormPost><URL>' + PLUGIN + '/punchout/demo</URL></BrowserFormPost>'
+    + '<BrowserFormPost><URL>' + returnUrl + '</URL></BrowserFormPost>'
     + '</PunchOutSetupRequest>'
     + '</Request>'
     + '</cXML>';
@@ -372,7 +387,7 @@ async function startPunchout() {
     var match = text.match(/<URL>([^<]+)<\\/URL>/);
     if (!match) { status.textContent = 'Error — no URL in response:\\n' + text; btn.disabled=false; return; }
     var url = match[1];
-    status.textContent = 'Session started!\\nOpening storefront in new tab…\\n\\nStartPage URL:\\n' + url;
+    status.textContent = 'Session started! BrowserFormPost → ' + returnUrl + '\\nOpening storefront in new tab…\\n\\nStartPage URL:\\n' + url;
     window.open(url, '_blank');
     btn.disabled = false;
   } catch(e) {
