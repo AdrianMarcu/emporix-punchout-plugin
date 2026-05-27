@@ -75,6 +75,13 @@ export function createWidgetRouter(tenantId: string): Router {
         userTenant: TENANT,
         username: me.email || me.contactEmail || me.id,
       });
+      // IMPORTANT: remove stale externalCustomerToken/Saas/ExpiresIn keys from any
+      // previous punchout session.  If they survive into the reload, syncAuth() finds
+      // them alongside our new 'user' key and calls loginBasedOnCustomerToken again,
+      // which hits GET /iam/{tenant}/users/me/scopes → 404 → infinite loading screen.
+      localStorage.removeItem('externalCustomerToken');
+      localStorage.removeItem('externalSaasToken');
+      localStorage.removeItem('externalTokenExpiresIn');
       localStorage.setItem('user',                   JSON.stringify(user));
       localStorage.setItem('customerToken',          ptToken);
       localStorage.setItem('saasToken',              ptSaas);
