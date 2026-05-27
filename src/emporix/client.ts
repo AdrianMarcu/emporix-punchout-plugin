@@ -52,21 +52,49 @@ export class EmporixClient {
   }
 
   async getCart(cartId: string, accessToken: string): Promise<EmporixCart> {
+    const headers = { Authorization: accessToken };
     try {
-      const res = await axios.get<EmporixCart>(
-        `${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
-        { ...this.axiosOpts, headers: { Authorization: accessToken } },
-      );
-      // Log the raw cart so we can verify field names match EmporixCartItem
+      // Emporix splits cart metadata and line items into separate resources.
+      const [cartRes, itemsRes] = await Promise.all([
+        axios.get(`${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
+          { ...this.axiosOpts, headers }),
+        axios.get(`${this.apiBase}/cart/${this.tenantId}/carts/${cartId}/items`,
+          { ...this.axiosOpts, headers }),
+      ]);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = res.data as any;
-      console.log('[getCart] raw keys:', Object.keys(raw).join(', '));
-      console.log('[getCart] items count:', Array.isArray(raw.items) ? raw.items.length : `not array — type: ${typeof raw.items}`);
-      if (Array.isArray(raw.items) && raw.items.length > 0) {
-        console.log('[getCart] first item keys:', Object.keys(raw.items[0]).join(', '));
-        console.log('[getCart] first item sample:', JSON.stringify(raw.items[0]).slice(0, 400));
+      const rawCart = cartRes.data as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawItems = itemsRes.data as any;
+      const itemArr: unknown[] = Array.isArray(rawItems) ? rawItems
+        : Array.isArray(rawItems?.items) ? rawItems.items : [];
+
+      console.log('[getCart] cart.currency:', rawCart.currency, '| items count:', itemArr.length);
+      if (itemArr.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const first = itemArr[0] as any;
+        console.log('[getCart] first item keys:', Object.keys(first).join(', '));
+        console.log('[getCart] first item sample:', JSON.stringify(first).slice(0, 500));
       }
-      return res.data;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = itemArr.map((i: any) => ({
+        itemId: i.id ?? '',
+        sku:      i.itemYrn?.split(':').pop() ?? i.product?.id ?? i.productId ?? i.code ?? i.sku ?? '',
+        name:     typeof i.name === 'string' ? i.name : (i.name?.en ?? i.productName ?? ''),
+        quantity: Number(i.quantity ?? 1),
+        price: {
+          amount:   Number(i.unitPrice?.effectiveValue ?? i.price?.amount ?? i.itemPrice?.effectiveValue ?? 0),
+          currency: i.unitPrice?.currency ?? i.price?.currency ?? rawCart.currency ?? 'USD',
+        },
+        uom: i.measurementUnit ?? i.uom ?? 'EA',
+      }));
+
+      return {
+        cartId: rawCart.id ?? cartId,
+        items,
+        currency: rawCart.currency ?? 'USD',
+      };
     } catch (err) {
       throw new Error('Failed to fetch Emporix cart', { cause: err });
     }
