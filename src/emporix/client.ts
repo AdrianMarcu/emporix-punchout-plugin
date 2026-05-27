@@ -57,6 +57,15 @@ export class EmporixClient {
         `${this.apiBase}/cart/${this.tenantId}/carts/${cartId}`,
         { ...this.axiosOpts, headers: { Authorization: accessToken } },
       );
+      // Log the raw cart so we can verify field names match EmporixCartItem
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = res.data as any;
+      console.log('[getCart] raw keys:', Object.keys(raw).join(', '));
+      console.log('[getCart] items count:', Array.isArray(raw.items) ? raw.items.length : `not array — type: ${typeof raw.items}`);
+      if (Array.isArray(raw.items) && raw.items.length > 0) {
+        console.log('[getCart] first item keys:', Object.keys(raw.items[0]).join(', '));
+        console.log('[getCart] first item sample:', JSON.stringify(raw.items[0]).slice(0, 400));
+      }
       return res.data;
     } catch (err) {
       throw new Error('Failed to fetch Emporix cart', { cause: err });
