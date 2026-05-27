@@ -9,122 +9,41 @@ export function createWidgetRouter(tenantId: string): Router {
    * Cross-origin widget script loaded by the storefront (one <script> tag in index.html).
    *
    * Flow:
-   * 1. Plugin redirects to storefront with ?pt_customerToken=X&pt_saasToken=Y&pt_expiresIn=Z&punchoutSessionId=S
-   *    (pt_* prefix — NOT the standard customerToken/saasToken that syncAuth() reads from URL,
-   *    which would trigger loginBasedOnCustomerToken and an infinite reload loop)
-   * 2. Widget runs (before React), stores punchoutSessionId in sessionStorage
-   * 3. Widget detects pt_* params → fetches GET /customer/{tenant}/me with the customer JWT
-   *    (Emporix API has Access-Control-Allow-Origin: * so cross-origin fetch works)
-   * 4. Writes the full 'user' JSON blob + customerToken + saasToken directly to localStorage,
-   *    strips all pt_* params from URL, reloads once
-   * 5. On reload: URL is clean, localStorage.user is set → b2b-showcase syncAuth() reads it,
-   *    sets isLoggedIn=true immediately — NO loginBasedOnCustomerToken call.
-   *    (loginBasedOnCustomerToken calls GET /iam/{tenant}/users/me/scopes which 404s on this
-   *    tenant, leaving the auth state permanently "loading". Bypassing it avoids the hang.)
-   * 6. Widget shows "Return Cart to Procurement" button from sessionStorage session ID
+   * 1. Plugin redirects to storefront with ?punchoutSessionId=S (anonymous — no auth tokens)
+   * 2. Widget runs, stores punchoutSessionId in sessionStorage
+   * 3. Storefront loads as anonymous — user browses and adds items to their anonymous cart
+   * 4. Widget shows "Return Cart to Procurement" button
+   * 5. User clicks button → widget reads localStorage.sessionId (the storefront's anonymous
+   *    session ID) and navigates to GET /punchout/return?session=S&storefrontSession=…
+   * 6. Plugin uses storefrontSession to look up the anonymous cart via service-account query
+   *    and generates the cXML/OCI response
+   *
+   * Why anonymous instead of injecting customer auth:
+   * b2b-showcase calls GET /session-context/{tenant}/me/context when isLoggedIn=true.
+   * That endpoint 404s for this tenant as an uncaught promise rejection, so setLoading(false)
+   * never runs → infinite loading screen.  Anonymous browsing sidesteps this entirely.
    */
   router.get('/punchout-widget.js', cors(), (_req: Request, res: Response) => {
     const pluginHost = appConfig.pluginHost;
-    const apiBase = appConfig.emporix.apiBase;
     res.type('application/javascript').send(`
 (function() {
-  var PLUGIN   = ${JSON.stringify(pluginHost)};
-  var TENANT   = ${JSON.stringify(tenantId)};
-  var API_BASE = ${JSON.stringify(apiBase)};
+  var PLUGIN = ${JSON.stringify(pluginHost)};
   var SK = '_punchout_session_id';
   var urlParams = new URLSearchParams(window.location.search);
 
-  // Step 1: Capture punchoutSessionId into sessionStorage so it survives the reload.
+  // Step 1: Capture punchoutSessionId into sessionStorage so it survives SPA navigation.
   var sessionIdFromUrl = urlParams.get('punchoutSessionId');
   if (sessionIdFromUrl) {
     sessionStorage.setItem(SK, sessionIdFromUrl);
-  }
-
-  // Step 2: Handle auth token injection when redirected from the plugin.
-  var ptToken   = urlParams.get('pt_customerToken');
-  var ptSaas    = urlParams.get('pt_saasToken');
-  var ptExpires = urlParams.get('pt_expiresIn');
-
-  if (ptToken && ptSaas) {
-    // Hide the page while we do async work so there is no flash of anonymous content.
-    document.documentElement.style.visibility = 'hidden';
-
-    // Strip all punchout params from URL immediately (synchronous).
-    ['pt_customerToken', 'pt_saasToken', 'pt_expiresIn', 'punchoutSessionId'].forEach(function(k) {
-      urlParams.delete(k);
-    });
+    // Strip punchoutSessionId from URL so it doesn't clutter the address bar.
+    urlParams.delete('punchoutSessionId');
     var cleanUrl = window.location.pathname
       + (urlParams.toString() ? '?' + urlParams.toString() : '')
       + window.location.hash;
     window.history.replaceState(null, '', cleanUrl);
-
-    // Fetch the customer profile from Emporix (CORS: Access-Control-Allow-Origin: *).
-    // b2b-showcase reads localStorage.getItem('user') to determine isLoggedIn.
-    // By writing it here we bypass loginBasedOnCustomerToken, which calls
-    // GET /iam/{tenant}/users/me/scopes — an endpoint that 404s on this tenant,
-    // causing syncAuth() to leave isLoggedIn=false permanently (infinite loading screen).
-    fetch(API_BASE + '/customer/' + TENANT + '/me', {
-      headers: { 'Authorization': 'Bearer ' + ptToken }
-    })
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
-    .then(function(me) {
-      var expiresAt = Date.now() + Number(ptExpires || 3600) * 1000;
-      // Build the same shape loginBasedOnCustomerToken would produce:
-      // the raw /me response plus userTenant + username appended.
-      var user = Object.assign({}, me, {
-        userTenant: TENANT,
-        username: me.email || me.contactEmail || me.id,
-      });
-      // IMPORTANT: remove stale externalCustomerToken/Saas/ExpiresIn keys from any
-      // previous punchout session.  If they survive into the reload, syncAuth() finds
-      // them alongside our new 'user' key and calls loginBasedOnCustomerToken again,
-      // which hits GET /iam/{tenant}/users/me/scopes → 404 → infinite loading screen.
-      localStorage.removeItem('externalCustomerToken');
-      localStorage.removeItem('externalSaasToken');
-      localStorage.removeItem('externalTokenExpiresIn');
-      localStorage.setItem('user',                   JSON.stringify(user));
-      localStorage.setItem('customerToken',          ptToken);
-      localStorage.setItem('saasToken',              ptSaas);
-      localStorage.setItem('customerTokenExpiresIn', String(expiresAt));
-      localStorage.setItem('tenant',                 TENANT);
-
-      // Pre-create the customer session context so the storefront's
-      // GET /session-context/{tenant}/me/context doesn't 404.
-      // b2b-showcase calls this when isLoggedIn=true; if it 404s the error
-      // is uncaught → setLoading(false) never runs → infinite loading screen.
-      // Emporix CORS allows POST from any origin; we wait for it before reloading
-      // so the resource exists when the storefront makes the GET on next mount.
-      fetch(API_BASE + '/session-context/' + TENANT + '/me/context', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + ptToken, 'Content-Type': 'application/json' },
-        body: '{}'
-      })
-      .then(function(r) {
-        console.log('[punchout-widget] session-context POST:', r.status);
-      })
-      .catch(function(e) {
-        console.warn('[punchout-widget] session-context POST failed:', e);
-      })
-      .then(function() {
-        // Reload — React will mount with user in localStorage → isLoggedIn=true,
-        // no loginBasedOnCustomerToken call, no /iam/scopes call.
-        window.location.reload();
-      });
-    })
-    .catch(function(err) {
-      // /me fetch failed — fall back to externalCustomerToken so syncAuth() can
-      // attempt loginBasedOnCustomerToken as a best-effort last resort.
-      console.warn('[punchout-widget] /me fetch failed (' + err + ') — falling back to externalCustomerToken');
-      localStorage.setItem('externalCustomerToken',  ptToken);
-      localStorage.setItem('externalSaasToken',      ptSaas);
-      if (ptExpires) localStorage.setItem('externalTokenExpiresIn', ptExpires);
-      document.documentElement.style.visibility = '';
-      window.location.reload();
-    });
-    return; // Don't continue; widget will re-run after reload
   }
 
-  // Step 3: Show "Return Cart to Procurement" button if in an active punchout session.
+  // Step 2: Show "Return Cart to Procurement" button if in an active punchout session.
   var sessionId = sessionStorage.getItem(SK);
   if (!sessionId) return;
 
@@ -144,7 +63,20 @@ export function createWidgetRouter(tenantId: string): Router {
   btn.addEventListener('click', function() {
     btn.textContent = 'Returning…';
     btn.disabled = true;
-    window.location.href = PLUGIN + '/punchout/return?session=' + encodeURIComponent(sessionId);
+
+    // Pass the storefront's anonymous session ID so the plugin can find the correct cart.
+    // b2b-showcase stores the anonymous session ID in localStorage under 'sessionId'.
+    // The plugin uses GET /cart/{tenant}/carts?sessionId=… (service-account) to locate
+    // the cart the user was shopping in during this punchout session.
+    var returnUrl = PLUGIN + '/punchout/return?session=' + encodeURIComponent(sessionId);
+    try {
+      var storefrontSession = localStorage.getItem('sessionId');
+      if (storefrontSession) {
+        returnUrl += '&storefrontSession=' + encodeURIComponent(storefrontSession);
+      }
+    } catch(e) {}
+
+    window.location.href = returnUrl;
   });
 
   document.body.appendChild(btn);

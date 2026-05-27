@@ -147,15 +147,17 @@ export function createPunchoutRouter(tenantId: string): Router {
   });
 
   /** Shared logic for both POST /return (widget form) and GET /return (navigation). */
-  async function executeReturn(sessionId: string | undefined, res: Response): Promise<void> {
+  async function executeReturn(
+    sessionId: string | undefined,
+    res: Response,
+    /** Anonymous session ID from the storefront's localStorage.sessionId.
+     *  When provided the plugin queries GET /carts?sessionId=… to find the cart
+     *  the user was actually shopping in (anonymous flow). */
+    storefrontSession?: string,
+  ): Promise<void> {
     const session = sessionId ? await store.getSession(sessionId) : null;
     if (!session) {
       res.status(410).send(expiredPage());
-      return;
-    }
-
-    if (!session.emporixCartId) {
-      res.status(410).send('<html><body><p>No items in cart yet. Please add products before returning to procurement.</p></body></html>');
       return;
     }
 
@@ -168,17 +170,46 @@ export function createPunchoutRouter(tenantId: string): Router {
       return;
     }
 
+    const saTokenCache = new TokenCache(
+      appConfig.emporix.apiBase,
+      tenantId,
+      cfg.serviceAccount.clientId,
+      cfg.serviceAccount.clientSecret,
+    );
+    const saToken = await saTokenCache.getToken();
+    const emporixClient = new EmporixClient(appConfig.emporix.apiBase, tenantId, appConfig.outboundTimeoutMs);
+
+    // Resolve cart ID: prefer storefrontSession lookup (finds the cart the user
+    // actually shopped in during this anonymous punchout session), fall back to
+    // the server-side cart we created/found during session initialisation.
+    let cartId = session.emporixCartId;
+    if (storefrontSession) {
+      try {
+        const foundId = await emporixClient.findCustomerCartId(
+          '',                   // customerNumber unknown for anonymous lookup
+          '',                   // no customer JWT
+          `Bearer ${saToken}`,  // SA token covers the SA/sessionId strategy
+          storefrontSession,
+        );
+        if (foundId) {
+          console.log('[return] cart resolved via storefrontSession:', foundId);
+          cartId = foundId;
+        } else {
+          console.warn('[return] storefrontSession lookup returned nothing, falling back to session.cartId');
+        }
+      } catch (err) {
+        console.warn('[return] storefrontSession lookup error:', err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    if (!cartId) {
+      res.status(410).send('<html><body><p>No cart found. Please add products before returning to procurement.</p></body></html>');
+      return;
+    }
+
     let cart: EmporixCart;
     try {
-      const saTokenCache = new TokenCache(
-        appConfig.emporix.apiBase,
-        tenantId,
-        cfg.serviceAccount.clientId,
-        cfg.serviceAccount.clientSecret,
-      );
-      const saToken = await saTokenCache.getToken();
-      const emporixClient = new EmporixClient(appConfig.emporix.apiBase, tenantId, appConfig.outboundTimeoutMs);
-      cart = await emporixClient.getCart(session.emporixCartId, `Bearer ${saToken}`);
+      cart = await emporixClient.getCart(cartId, `Bearer ${saToken}`);
     } catch (err) {
       console.error('[return] failed to fetch cart:', err instanceof Error ? err.message : String(err));
       res.status(502).send(expiredPage());
@@ -230,7 +261,8 @@ export function createPunchoutRouter(tenantId: string): Router {
    */
   router.get('/return', async (req: Request, res: Response) => {
     const sessionId = req.query.session as string | undefined;
-    await executeReturn(sessionId, res);
+    const storefrontSession = req.query.storefrontSession as string | undefined;
+    await executeReturn(sessionId, res, storefrontSession);
   });
 
   /** Demo procurement simulator — launcher page. */

@@ -221,31 +221,15 @@ export function createSessionRouter(tenantId: string): Router {
       });
 
       // Step 4: Build the redirect URL.
-      // Step 4: Build the redirect URL.
-      // When using a customer JWT we deliberately omit cartId from the URL.
-      // Passing cartId causes the storefront to call an Emporix "merge cart" API,
-      // which returns 400 "Cart cannot be merged into itself" because the cartId
-      // is already the customer's active cart. Without cartId the storefront simply
-      // calls getCartAccount({ customerId }) after loginBasedOnCustomerToken() and
-      // finds the same cart naturally — no merge needed.
-      // The cartId is stored in the session (updateCartId above) for the return flow.
+      // We intentionally do NOT pass customer tokens to the storefront.
+      // Attempting to log the user in client-side via localStorage injection triggers
+      // GET /session-context/{tenant}/me/context (an endpoint that 404s for this tenant)
+      // as an uncaught promise rejection → loading spinner never clears.
+      // Instead we redirect as anonymous: the user browses and adds items to their
+      // anonymous cart.  At return time the widget reads localStorage.sessionId
+      // (the storefront's anonymous session ID) and passes it to GET /punchout/return
+      // as ?storefrontSession=…, where the plugin looks up the anonymous cart directly.
       const params = new URLSearchParams();
-      if (!redirectCustomerToken) {
-        // Anonymous fallback: storefront needs cartId to find the anonymous cart by session.
-        params.set('cartId', cartId);
-      }
-      if (redirectCustomerToken && redirectSaasToken) {
-        // Use pt_* prefix so the storefront's syncAuth() does NOT process these directly.
-        // punchout-widget.js intercepts them, injects into localStorage under the keys
-        // syncAuth() checks (externalCustomerToken / externalSaasToken / externalTokenExpiresIn),
-        // strips the params, and reloads — preventing the infinite-reload loop.
-        params.set('pt_customerToken', redirectCustomerToken);
-        params.set('pt_saasToken', redirectSaasToken);
-        params.set('pt_expiresIn', String(redirectExpiresIn));
-      }
-      // punchoutSessionId is read by punchout-widget.js on the storefront.
-      // The widget stores it in sessionStorage so the "Return Cart to Procurement"
-      // button can navigate to GET /punchout/return?session=<id> even after SPA navigation.
       params.set('punchoutSessionId', sessionId);
       const redirectUrl = `${cfg.storefrontBaseUrl}?${params.toString()}`;
       console.log('[session] redirecting to storefront:', redirectUrl.replace(/customerToken=[^&]+/, 'customerToken=<redacted>').replace(/saasToken=[^&]+/, 'saasToken=<redacted>'));
