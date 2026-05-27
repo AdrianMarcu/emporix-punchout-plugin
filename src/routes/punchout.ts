@@ -388,10 +388,12 @@ async function startPunchout() {
 function buildDemoReceivePage(cxml: string): string {
   // Extract items from cXML for a readable summary
   const items: Array<{qty: string; sku: string; name: string; price: string; currency: string}> = [];
-  const itemRe = /<ItemIn quantity="([^"]+)"[\s\S]*?<SupplierPartID>([^<]*)<\/SupplierPartID>[\s\S]*?<Description[^>]*>([^<]*)<\/Description>[\s\S]*?<Money currency="([^"]+)">([^<]+)<\/Money>/g;
+  // Generator order inside <ItemDetail>: UnitPrice/Money → Description → UnitOfMeasure
+  // Regex must match Money BEFORE Description to reflect that order.
+  const itemRe = /<ItemIn quantity="([^"]+)"[\s\S]*?<SupplierPartID>([^<]*)<\/SupplierPartID>[\s\S]*?<Money currency="([^"]+)">([^<]+)<\/Money>[\s\S]*?<Description[^>]*>([^<]*)<\/Description>/g;
   let m: RegExpExecArray | null;
   while ((m = itemRe.exec(cxml)) !== null) {
-    items.push({ qty: m[1], sku: m[2], name: m[3], currency: m[4], price: m[5] });
+    items.push({ qty: m[1], sku: m[2], currency: m[3], price: m[4], name: m[5] });
   }
 
   const rows = items.length
