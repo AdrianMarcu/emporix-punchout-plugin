@@ -58,7 +58,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/punchout', cors(), punchoutRateLimiter, createPunchoutRouter(config.emporix.tenantId));
 app.use('/session', createSessionRouter(config.emporix.tenantId));
 app.use('/admin', adminCors, createAdminRouter());
-app.use('/', createWidgetRouter());
+app.use('/', createWidgetRouter(config.emporix.tenantId));
 
 if (require.main === module) {
   app.listen(config.port, () => {

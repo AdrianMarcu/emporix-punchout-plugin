@@ -150,8 +150,13 @@ export class EmporixClient {
           : (raw?.id || raw?.cartId) ? [raw]
           : [];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const id = carts.map((c: any) => c.id || c.cartId).find(Boolean);
-        console.log(`[findCustomerCartId] strategy=${s.label} → ${id ? 'found: ' + id : 'no result'}`);
+        const id = carts
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((c: any) => c.id ?? c.cartId)
+          // Reject falsy, numeric 0, and string "0" — Emporix returns id:"0" as a
+          // placeholder when the customer has no real cart yet.
+          .find((v) => v != null && v !== 0 && v !== '0' && v !== '');
+        console.log(`[findCustomerCartId] strategy=${s.label} → ${id ? 'found: ' + id : 'no result (or placeholder id=0)'}`);
         if (id) return id;
       } catch (err) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
