@@ -131,26 +131,35 @@ export function createSessionRouter(tenantId: string): Router {
           redirectCustomerToken = customerLogin.accessToken;
           redirectSaasToken = customerLogin.saasToken;
           redirectExpiresIn = customerLogin.expiresIn;
-          console.log('[session] customer login succeeded — will find or create customer-owned cart');
+          console.log('[session] customer login succeeded — login response keys:', Object.keys(customerLogin).join(', '));
 
           // Customer login auto-creates a cart in Emporix, so direct cart creation
           // always hits 409. Find the existing cart first using multiple query strategies;
           // only fall back to explicit creation if nothing is found.
           try {
+            // Some Emporix tenants return the active cartId directly in the login response.
+            if (customerLogin.cartId) {
+              console.log('[session] login response includes cartId:', customerLogin.cartId);
+              existingCustomerCartIds = [customerLogin.cartId];
+            }
+
             const me = await emporixClient.getCustomerMe(cartBearerToken);
             const customerNumber = me.customerNumber;
             console.log('[session] punchout customer number:', customerNumber);
-            const foundId = await emporixClient.findCustomerCartId(
-              customerNumber,
-              cartBearerToken,
-              `Bearer ${saToken}`,
-              anonTokenData.sessionId,
-            );
-            if (foundId) {
-              existingCustomerCartIds = [foundId];
-              console.log('[session] existing customer cart found — will use:', foundId);
-            } else {
-              console.log('[session] no existing cart found — will attempt creation');
+
+            if (existingCustomerCartIds.length === 0) {
+              const foundId = await emporixClient.findCustomerCartId(
+                customerNumber,
+                cartBearerToken,
+                `Bearer ${saToken}`,
+                anonTokenData.sessionId,
+              );
+              if (foundId) {
+                existingCustomerCartIds = [foundId];
+                console.log('[session] existing customer cart found — will use:', foundId);
+              } else {
+                console.log('[session] no existing cart found — will attempt creation');
+              }
             }
           } catch (lookupErr) {
             console.warn('[session] cart lookup error:', lookupErr instanceof Error ? lookupErr.message : String(lookupErr));

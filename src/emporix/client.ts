@@ -5,6 +5,11 @@ export interface CustomerLoginResponse {
   accessToken: string;
   saasToken: string;
   expiresIn: number;
+  /** Emporix may return the customer's active cartId directly in the login response */
+  cartId?: string;
+  sessionId?: string;
+  // allow any extra fields for logging
+  [key: string]: unknown;
 }
 
 export class EmporixClient {
@@ -150,13 +155,20 @@ export class EmporixClient {
           : (raw?.id || raw?.cartId) ? [raw]
           : [];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const id = carts
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((c: any) => c.id ?? c.cartId)
-          // Reject falsy, numeric 0, and string "0" — Emporix returns id:"0" as a
-          // placeholder when the customer has no real cart yet.
-          .find((v) => v != null && v !== 0 && v !== '0' && v !== '');
-        console.log(`[findCustomerCartId] strategy=${s.label} → ${id ? 'found: ' + id : 'no result (or placeholder id=0)'}`);
+        const id = carts.map((c: any) => {
+          const direct = c.id || c.cartId;
+          if (direct && String(direct) !== '0') return String(direct);
+          // direct is "0"/0/falsy — try YRN: urn:yaas:...:TENANT:CART_ID
+          const yrn: string = c.yrn || c.YRN || '';
+          const fromYrn = yrn.split(':').filter(Boolean).pop();
+          if (fromYrn && fromYrn !== '0') return fromYrn;
+          // Nothing better — keep "0" so the 409 fallback can still proceed
+          return direct != null ? String(direct) : undefined;
+        }).find(Boolean);
+        // Log raw first element so we can see exactly what Emporix returns
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawSample = JSON.stringify(Array.isArray(raw) ? (raw as any[])[0] : raw).slice(0, 300);
+        console.log(`[findCustomerCartId] strategy=${s.label} → ${id ?? 'no result'} | raw: ${rawSample}`);
         if (id) return id;
       } catch (err) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
