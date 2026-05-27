@@ -148,9 +148,15 @@ export class EmporixClient {
         );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = res.data as any;
+        // When Emporix returns a single cart object (not a paged list) it always
+        // includes a 'yrn' field.  We must check for that BEFORE checking raw.items,
+        // because the cart object itself has an 'items' array of LINE ITEMS — if we
+        // check raw.items first we extract line-item ids (like "0") instead of the
+        // cart id ("6a15dce7d9cbe97527fd0fe0").
         const carts: unknown[] = Array.isArray(raw) ? raw
           : Array.isArray(raw?.data) ? raw.data
-          : Array.isArray(raw?.items) ? raw.items
+          : raw?.yrn ? [raw]                      // single cart object — wrap it
+          : Array.isArray(raw?.items) ? raw.items // paged list with items array
           : Array.isArray(raw?.carts) ? raw.carts
           : (raw?.id || raw?.cartId) ? [raw]
           : [];
